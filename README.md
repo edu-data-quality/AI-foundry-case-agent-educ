@@ -130,6 +130,35 @@ Toda resposta traz `situacao_matricula`, `coeficiente_rendimento`, `resumo_acade
 > As tools são **server-side**: o Foundry chama o mock pela internet. No trace, o span
 > aparece como `openapi_call_output`; a operação chamada fica nos atributos/`items` da conversa.
 
+### Evidências no portal do Foundry
+
+Capturas do agente `educ-agent-test` em execução no portal (`ai.azure.com`).
+
+**1. Playground — conversa e chamadas de ferramenta**
+
+O agente cumprimenta, pede a matrícula, identifica o aluno e então chama as OpenAPI
+tools conforme o assunto. Sob cada resposta aparece a linha do turno com latência,
+tokens, `Qualidade da IA` e o link **Rastreamentos**; os spans `openapi_call` /
+`openapi_call_output` evidenciam as tools server-side sendo invocadas.
+
+![Playground do agente: conversa, identificação do aluno e chamadas OpenAPI](docs/chat-playground.png)
+
+**2. Rastreamentos — tracing de cada turno**
+
+Cada interação vira um trace com status, duração, tokens de entrada/saída, custo
+estimado e os avaliadores (`intent_resolution`, `task_adherence`). Permite auditar
+qual tool foi chamada e o desempenho de cada execução.
+
+![Lista de rastreamentos com status, tokens, custo e avaliação](docs/rastreamento.png)
+
+**3. Monitor — métricas operacionais (Application Insights)**
+
+Visão agregada do agente: execuções ao longo do tempo, erros de IA generativa,
+chamadas de ferramenta por nome/latência/erros, modelos usados e consumo de tokens
+de entrada vs. saída — útil para custo e observabilidade.
+
+![Painel de métricas operacionais no Application Insights](docs/metricas-operacionais.png)
+
 ## Caminho B — Orquestração em Python (client-side)
 
 ```bash
