@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# Testes / cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Segredos e configuração local
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Azure / Foundry
+.azure/
+.azureml/
+
+# ngrok
+ngrok.yml
+*.ngrok.log
+ngrok.log*
+
+# IDEs / editores
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# SO
+.DS_Store
+Thumbs.db
+desktop.ini

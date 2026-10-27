@@ -1,0 +1,173 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Mock APIs da Instituição",
+    "version": "1.0.0",
+    "description": "APIs simuladas de triagem (financeiro, acadêmico e ação sensível)."
+  },
+  "servers": [
+    { "url": "https://fetch-compactly-latrine.ngrok-free.dev", "description": "Túnel ngrok para o mock local (atualize a cada restart)" }
+  ],
+  "paths": {
+    "/api/aluno": {
+      "post": {
+        "operationId": "identificarAluno",
+        "summary": "Identifica o aluno pela matrícula",
+        "description": "Use SEMPRE que receber a matrícula (ex.: ALU-12345) para confirmar a identidade antes de qualquer outra ação. Retorna aluno_nome, primeiro_nome, curso e situacao_matricula. Em caso de 404, a matrícula não existe.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AlunoPayload" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aluno identificado",
+            "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } }
+          },
+          "404": { "description": "Aluno não encontrado" },
+          "500": { "description": "Falha simulada no sistema de origem" }
+        }
+      }
+    },
+    "/api/financeiro": {
+      "post": {
+        "operationId": "consultarFinanceiro",
+        "summary": "Consulta dados financeiros do aluno",
+        "description": "Use APENAS quando a solicitação envolver boletos, mensalidades, pagamentos, débitos ou acordos. Retorna valor_debito, tem_pendencia e requer_aprovacao.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SolicitacaoPayload" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado da consulta financeira",
+            "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } }
+          },
+          "404": { "description": "Aluno não encontrado" },
+          "422": { "description": "Confiança insuficiente; encaminhar para atendimento humano" },
+          "500": { "description": "Falha simulada no sistema de origem" }
+        }
+      }
+    },
+    "/api/academico": {
+      "post": {
+        "operationId": "consultarAcademico",
+        "summary": "Consulta o histórico acadêmico do aluno",
+        "description": "Use APENAS quando a solicitação envolver notas, faltas, histórico, matrículas, disciplinas ou documentos. Informe 'consulta' para focar o retorno (notas, faltas, historico, disciplinas ou completo). Retorna situacao_matricula, coeficiente_rendimento, disciplinas (com nota_final e faltas), historico, resumo_academico e elegivel.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConsultaAcademicaPayload" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado da consulta acadêmica",
+            "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } }
+          },
+          "404": { "description": "Aluno não encontrado" },
+          "422": { "description": "Confiança insuficiente; encaminhar para atendimento humano" },
+          "500": { "description": "Falha simulada no sistema de origem" }
+        }
+      }
+    },
+    "/api/acao-sensivel": {
+      "post": {
+        "operationId": "executarAcaoSensivel",
+        "summary": "Executa ação sensível do aluno (requer aprovação humana)",
+        "description": "Use apenas após confirmação humana. Emite boleto/documento. Envie aprovado=true somente após o operador aprovar.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AcaoSensivelPayload" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ação executada ou negada",
+            "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } }
+          },
+          "404": { "description": "Aluno não encontrado" },
+          "500": { "description": "Falha simulada no sistema de origem" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AlunoPayload": {
+        "type": "object",
+        "required": ["aluno_id"],
+        "properties": {
+          "aluno_id": {
+            "type": "string",
+            "description": "Identificador/matrícula do aluno (ex.: ALU-12345)."
+          }
+        }
+      },
+      "SolicitacaoPayload": {
+        "type": "object",
+        "required": ["resumo"],
+        "properties": {
+          "resumo": {
+            "type": "string",
+            "description": "Resumo executivo da solicitação do aluno."
+          },
+          "aluno_id": {
+            "type": "string",
+            "default": "ALU-12345",
+            "description": "Identificador do aluno."
+          }
+        }
+      },
+      "ConsultaAcademicaPayload": {
+        "type": "object",
+        "required": ["resumo"],
+        "properties": {
+          "resumo": {
+            "type": "string",
+            "description": "Resumo executivo da solicitação do aluno."
+          },
+          "aluno_id": {
+            "type": "string",
+            "default": "ALU-12345",
+            "description": "Identificador do aluno."
+          },
+          "consulta": {
+            "type": "string",
+            "enum": ["notas", "faltas", "historico", "disciplinas", "completo"],
+            "default": "completo",
+            "description": "Foco do retorno acadêmico."
+          }
+        }
+      },
+      "AcaoSensivelPayload": {
+        "type": "object",
+        "required": ["aluno_id", "acao"],
+        "properties": {
+          "aluno_id": { "type": "string", "description": "Identificador do aluno." },
+          "acao": {
+            "type": "string",
+            "description": "Ação a executar (ex.: gerar_boleto, emitir_documento)."
+          },
+          "aprovado": {
+            "type": "boolean",
+            "default": false,
+            "description": "true somente após aprovação humana."
+          }
+        }
+      }
+    }
+  }
+}
