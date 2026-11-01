@@ -1,0 +1,4 @@
+# Dependências de desenvolvimento (junta as de runtime)
+-r requirements.txt
+pytest>=8.0
+httpx>=0.27
