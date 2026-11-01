@@ -25,7 +25,6 @@ frontend/ (Angular)  ──►  backend/ (FastAPI)  ──►  Azure AI Foundry 
 | Backend/API  | Python 3.12 · FastAPI · Uvicorn |
 | Front-end    | Angular 19 · Node 22 |
 | Base de dados| PostgreSQL (ou SQLite em testes) |
-| IA           | Azure AI Foundry · GPT-4o · RAG · OpenAPI Tools |
 
 ## Estrutura do repositório
 
@@ -133,8 +132,5 @@ Copie `.env.example` para `.env` (na raiz) e preencha conforme o ambiente.
 > As variáveis `TRIAGEM_*` e `MOCK_*` vêm do case arquivado
 > (`legacy/triagemia/`) e serão removidas quando o novo backend substituí-las.
 
-## Roadmap
-
-Detalhes do produto, épicos e histórico das decisões estão em
-[`docs/PRD.md`](docs/PRD.md). O trabalho é rastreado em GitHub Issues
-(milestones = épicos do PRD).
+Mais detalhes do produto em [`docs/PRD.md`](docs/PRD.md) e em
+[GitHub Issues](https://github.com/edu-data-quality/AI-foundry-case-agent-educ/issues).
