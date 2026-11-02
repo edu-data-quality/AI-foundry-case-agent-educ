@@ -32,11 +32,25 @@ durante o Setup** (issue #1): imagem `postgres:16-alpine`, volume persistente
 Isso antecipa o ambiente de dados para dev/testes antes da camada de acesso
 (issue #2), que passa a mirar `postgresql+psycopg://...` no compose.
 
+## Atualização (2026-11-02) — camada de dados e `.env`
+
+Com a issue #2, o backend passou a carregar `.env` via `load_dotenv()` em
+`backend/app/db/session.py` e `backend/alembic/env.py` (variáveis já exportadas
+pelo compose/CI têm precedência).
+
+- `backend/Dockerfile` copia `alembic.ini` e `alembic/` para a imagem.
+- `docker-compose.yml` monta `backend/alembic` como volume: migrações são
+  editadas sem rebuild.
+- `.env.example` mantém `DATABASE_URL` comentado: sem Docker, o fallback é
+  SQLite local. No compose, a URL do Postgres é injetada no serviço `backend`.
+- O seed demo se recusa a rodar com `APP_ENV=production`.
+
 ## Consequências
 
 - **Positivas:** mesmo ambiente para dev e testes; comando único
   (`docker compose up`) sobe o backend; CI futuro reaproveita o Dockerfile;
   a migração para Postgres em container é incremental.
 - **Negativas:** custo de imagem/minutagem no fluxo local; para devs sem Docker,
-  o fluxo `.venv` documentado continua válido (nenhuma das duas vias é obrigatória).
+  o fluxo `.venv` documentado continua válido desde que `DATABASE_URL` fique
+  comentado no `.env` (fallback SQLite) — nenhuma das duas vias é obrigatória.
 - **Frontend:** fica fora do Docker neste momento; executa com `ng serve` local.
