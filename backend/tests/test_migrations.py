@@ -6,7 +6,7 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 from app.db import models  # noqa: F401  (registra as tabelas na metadata)
 from app.db.base import Base
@@ -58,10 +58,44 @@ def test_migracao_nao_gera_drift_contra_os_modelos(tmp_path: Path) -> None:
     engine = create_engine(url)
 
     with engine.connect() as conexao:
-        contexto = MigrationContext.configure(conexao)
+        # `compare_server_default`: sem isso, defaults do servidor (B3) nunca
+        # apareceriam como drift e INSERT puro quebraria em runtime. A opção
+        # entra em `opts` (não é kwarg direto de `configure`).
+        contexto = MigrationContext.configure(
+            conexao, opts={"compare_server_default": True}
+        )
         diferencas = compare_metadata(contexto, Base.metadata)
 
     assert diferencas == []
+
+
+def test_insert_fora_do_orm_usa_server_defaults(tmp_path: Path) -> None:
+    """INSERT via SQL puro não pode violar NOT NULL nas colunas com default."""
+    url = f"sqlite:///{tmp_path / 'migrado.db'}"
+    _aplicar_migracoes(url)
+    engine = create_engine(url)
+    aluno_id = "0f0e0d0c-0b0a-4908-8706-050403020100"
+    conversa_id = "1f1e1d1c-1b1a-4918-8716-151413121100"
+
+    with engine.begin() as conexao:
+        conexao.execute(
+            text(
+                "INSERT INTO alunos (id, cpf, nome_completo, email) "
+                "VALUES (:id, '12345678901', 'Aluno Puro', 'puro@exemplo.com')"
+            ),
+            {"id": aluno_id},
+        )
+        conexao.execute(
+            text("INSERT INTO conversas (id, aluno_id) VALUES (:id, :aluno_id)"),
+            {"id": conversa_id, "aluno_id": aluno_id},
+        )
+        linha = conexao.execute(
+            text("SELECT status, data_inicio FROM conversas WHERE id = :id"),
+            {"id": conversa_id},
+        ).one()
+
+    assert linha.status == "ABERTA"
+    assert linha.data_inicio is not None
 
 
 def test_migracao_e_idempotente(tmp_path: Path) -> None:

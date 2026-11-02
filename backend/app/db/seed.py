@@ -74,9 +74,14 @@ def _disciplinas(sessao: Session) -> list[Disciplina]:
 def _matriculas(sessao: Session, aluno: Aluno, disciplinas: list[Disciplina]) -> None:
     """Matricula o aluno demo nas disciplinas, se ainda não estiver."""
     repo = MatriculaRepository(sessao)
-    existentes = {matricula.disciplina_id for matricula in repo.listar_por_aluno(aluno.id)}
+    # O UNIQUE é (aluno_id, disciplina_id, semestre_letivo): matrícula de outro
+    # semestre não deve impedir a criação da matrícula do semestre do seed.
+    existentes = {
+        (matricula.disciplina_id, matricula.semestre_letivo)
+        for matricula in repo.listar_por_aluno(aluno.id)
+    }
     for indice, disciplina in enumerate(disciplinas):
-        if disciplina.id in existentes:
+        if (disciplina.id, SEMESTRE_LETIVO) in existentes:
             continue
         if indice == 0:
             repo.criar(

@@ -40,6 +40,7 @@ def upgrade() -> None:
         sa.Column(
             "status_matricula",
             _enum(["ATIVO", "TRANCADO", "CONCLUIDO", "INADIMPLENTE"], "status_matricula"),
+            server_default="ATIVO",
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
@@ -63,7 +64,7 @@ def upgrade() -> None:
         sa.Column("senha_hash", sa.String(length=255), nullable=False),
         sa.Column("role", _enum(["ALUNO", "ADMIN"], "role_usuario"), nullable=False),
         sa.Column("aluno_id", sa.Uuid(), nullable=True),
-        sa.Column("ativo", sa.Boolean(), nullable=False),
+        sa.Column("ativo", sa.Boolean(), server_default=sa.true(), nullable=False),
         sa.ForeignKeyConstraint(["aluno_id"], ["alunos.id"]),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("login"),
@@ -85,6 +86,7 @@ def upgrade() -> None:
                 ["EM_ANDAMENTO", "APROVADO", "REPROVADO", "AGUARDANDO_NOTA"],
                 "status_disciplina",
             ),
+            server_default="EM_ANDAMENTO",
             nullable=False,
         ),
         sa.ForeignKeyConstraint(["aluno_id"], ["alunos.id"]),
@@ -112,6 +114,7 @@ def upgrade() -> None:
         sa.Column(
             "status_pagamento",
             _enum(["PENDENTE", "PAGO", "ATRASADO"], "status_pagamento"),
+            server_default="PENDENTE",
             nullable=False,
         ),
         sa.Column("linha_digitavel", sa.String(length=80), nullable=True),
@@ -128,7 +131,9 @@ def upgrade() -> None:
         sa.Column("aluno_id", sa.Uuid(), nullable=False),
         sa.Column("tipo_documento", sa.String(length=60), nullable=False),
         sa.Column("enviado_para_email", sa.String(length=160), nullable=False),
-        sa.Column("data_emissao", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "data_emissao", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["aluno_id"], ["alunos.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -138,8 +143,15 @@ def upgrade() -> None:
         "conversas",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("aluno_id", sa.Uuid(), nullable=False),
-        sa.Column("status", _enum(["ABERTA", "FECHADA"], "status_conversa"), nullable=False),
-        sa.Column("data_inicio", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "status",
+            _enum(["ABERTA", "FECHADA"], "status_conversa"),
+            server_default="ABERTA",
+            nullable=False,
+        ),
+        sa.Column(
+            "data_inicio", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("data_fim", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "motivo_fechamento",

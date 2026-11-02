@@ -8,9 +8,14 @@ import os
 import sqlite3
 from typing import Any
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
+
+# `.env` na raiz do repo (sobe a partir deste arquivo). `override=False` para
+# que variáveis já exportadas (compose, CI) tenham precedência.
+load_dotenv()
 
 DATABASE_URL_PADRAO = "sqlite:///./ead.db"
 

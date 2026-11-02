@@ -1,5 +1,7 @@
 """Testes do repositório de conversas (rastreio de sessão do aluno)."""
 
+from datetime import timedelta
+
 import pytest
 from sqlalchemy.orm import Session
 
@@ -57,13 +59,18 @@ def test_conversa_fechada_nao_pode_ser_fechada_de_novo(sessao: Session) -> None:
         repo.fechar(conversa.id, MotivoFechamento.TIMEOUT)
 
 
-def test_aluno_nao_pode_ter_duas_conversas_abertas(sessao: Session) -> None:
+def test_busca_aberta_devolve_a_mais_recente(sessao: Session) -> None:
+    """Sessão antiga sem TIMEOUT não pode quebrar a consulta (era 500)."""
     aluno = _criar_aluno(sessao)
     repo = ConversaRepository(sessao)
-    repo.abrir(aluno.id)
+    antiga = repo.abrir(aluno.id, thread_id_foundry="thread-antiga")
+    antiga.data_inicio = antiga.data_inicio - timedelta(days=1)
+    sessao.commit()
 
-    with pytest.raises(ValueError, match="já tem conversa aberta"):
-        repo.abrir(aluno.id)
+    nova = repo.abrir(aluno.id, thread_id_foundry="thread-nova")
+
+    assert repo.buscar_aberta_por_aluno(aluno.id).id == nova.id
+    assert antiga.status is StatusConversa.ABERTA
 
 
 def test_busca_conversa_aberta_do_aluno(sessao: Session) -> None:

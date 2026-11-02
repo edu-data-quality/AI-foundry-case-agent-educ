@@ -20,11 +20,11 @@ class ConversaRepository:
     ) -> Conversa:
         """Abre uma conversa para o aluno.
 
-        Recusa abrir uma segunda sessão enquanto houver uma em aberto: o
-        rastreio E2E assume no máximo uma conversa ativa por aluno.
+        O histórico aceita várias sessões por aluno (inclusive mais de uma
+        ABERTA, se uma sessão antiga não teve TIMEOUT registrado). `abrir` não
+        recusa: quem consulta usa `buscar_aberta_por_aluno`, que devolve a
+        mais recente.
         """
-        if self.buscar_aberta_por_aluno(aluno_id) is not None:
-            raise ValueError(f"aluno {aluno_id} já tem conversa aberta")
         conversa = Conversa(
             aluno_id=aluno_id,
             status=StatusConversa.ABERTA,
@@ -52,10 +52,17 @@ class ConversaRepository:
         return self._sessao.get(Conversa, conversa_id)
 
     def buscar_aberta_por_aluno(self, aluno_id: uuid.UUID) -> Conversa | None:
-        """Retorna a conversa aberta do aluno, se existir."""
+        """Retorna a conversa ABERTA mais recente do aluno, se existir.
+
+        `first()` com ordenação decrescente (nunca `one_or_none()`): sessões
+        antigas sem TIMEOUT podem deixar mais de uma linha ABERTA, e uma
+        consulta estrita estouraria `MultipleResultsFound` (HTTP 500).
+        """
         return self._sessao.scalars(
-            select(Conversa).where(
+            select(Conversa)
+            .where(
                 Conversa.aluno_id == aluno_id,
                 Conversa.status == StatusConversa.ABERTA,
             )
-        ).one_or_none()
+            .order_by(Conversa.data_inicio.desc())
+        ).first()

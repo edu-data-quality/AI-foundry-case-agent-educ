@@ -15,6 +15,8 @@ services:
       - ./backend/alembic:/app/alembic
     environment:
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-ead}:${POSTGRES_PASSWORD:-ead}@db:5432/${POSTGRES_DB:-ead}
+      # Guard do seed demo depende do ambiente (ver app/db/seed.py)
+      - APP_ENV=${APP_ENV:-development}
 
   db:
     image: postgres:16-alpine

@@ -3,11 +3,15 @@
 from logging.config import fileConfig
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
-from app.db import models  # noqa: F401  (registra as tabelas na metadata)
-from app.db.base import Base
-from app.db.session import get_database_url
+# `.env` na raiz do repo; `override=False` preserva o ambiente do compose/CI.
+load_dotenv()
+
+from app.db import models  # noqa: F401,E402  (registra as tabelas na metadata)
+from app.db.base import Base  # noqa: E402
+from app.db.session import get_database_url  # noqa: E402
 
 config = context.config
 

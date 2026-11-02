@@ -13,6 +13,8 @@ from app.db.models import (
     RoleUsuario,
     Usuario,
 )
+from app.repositories.academico import DisciplinaRepository, MatriculaRepository
+from app.repositories.alunos import AlunoRepository
 from app.repositories.usuarios import UsuarioRepository
 
 
@@ -43,6 +45,30 @@ def test_seed_cria_dados_academicos_e_financeiros(sessao: Session) -> None:
     assert sessao.scalar(
         select(func.count()).select_from(Mensalidade).where(Mensalidade.aluno_id == aluno.id)
     ) >= 2
+
+
+def test_seed_nao_confunde_semestre_letivo(sessao: Session) -> None:
+    """Matrícula de outro semestre não pode impedir a do semestre do seed."""
+    aluno = AlunoRepository(sessao).criar(
+        cpf=seed.CPF_ALUNO_DEMO,
+        nome_completo="Aluno Demonstração",
+        email=seed.EMAIL_ALUNO_DEMO,
+    )
+    disciplina = DisciplinaRepository(sessao).criar(
+        codigo="ADS101", nome="Algoritmos e Lógica de Programação", semestre_ideal=1
+    )
+    MatriculaRepository(sessao).criar(
+        aluno_id=aluno.id, disciplina_id=disciplina.id, semestre_letivo="2025.2"
+    )
+
+    seed.executar(sessao)
+
+    semestres = {
+        matricula.semestre_letivo
+        for matricula in MatriculaRepository(sessao).listar_por_aluno(aluno.id)
+        if matricula.disciplina_id == disciplina.id
+    }
+    assert semestres == {"2025.2", seed.SEMESTRE_LETIVO}
 
 
 def test_seed_nao_guarda_senha_em_texto_puro(sessao: Session) -> None:

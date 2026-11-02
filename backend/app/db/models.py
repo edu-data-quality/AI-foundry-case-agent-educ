@@ -4,6 +4,10 @@ Decisões de compatibilidade:
 - `native_enum=False`: os ENUMs vêm como VARCHAR + CHECK, iguais em SQLite
   (dev/testes) e PostgreSQL (produção).
 - `Uuid`: renderiza CHAR(32) no SQLite e UUID nativo no PostgreSQL.
+- `id`: gerado na aplicação (`uuid.uuid4`), não pelo banco — não há
+  `server_default` portátil para UUID em SQLite e PostgreSQL.
+- `server_default` nas colunas com valor padrão: INSERT via SQL puro (fora do
+  ORM) funciona sem violar NOT NULL.
 """
 
 import enum
@@ -22,6 +26,8 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    func,
+    true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -97,6 +103,7 @@ class Aluno(Base):
     status_matricula: Mapped[StatusMatricula] = mapped_column(
         _enum_portatil(StatusMatricula, "status_matricula"),
         default=StatusMatricula.ATIVO,
+        server_default="ATIVO",
         nullable=False,
     )
 
@@ -154,6 +161,7 @@ class MatriculaDisciplina(Base):
     status_disciplina: Mapped[StatusDisciplina] = mapped_column(
         _enum_portatil(StatusDisciplina, "status_disciplina"),
         default=StatusDisciplina.EM_ANDAMENTO,
+        server_default="EM_ANDAMENTO",
         nullable=False,
     )
 
@@ -177,6 +185,7 @@ class Mensalidade(Base):
     status_pagamento: Mapped[StatusPagamento] = mapped_column(
         _enum_portatil(StatusPagamento, "status_pagamento"),
         default=StatusPagamento.PENDENTE,
+        server_default="PENDENTE",
         nullable=False,
     )
     linha_digitavel: Mapped[str | None] = mapped_column(String(80))
@@ -195,7 +204,7 @@ class SolicitacaoDocumento(Base):
     tipo_documento: Mapped[str] = mapped_column(String(60), nullable=False)
     enviado_para_email: Mapped[str] = mapped_column(String(160), nullable=False)
     data_emissao: Mapped[datetime] = mapped_column(
-        DateTimeUtc, default=_agora, nullable=False
+        DateTimeUtc, default=_agora, server_default=func.now(), nullable=False
     )
 
     aluno: Mapped[Aluno] = relationship(back_populates="solicitacoes")
@@ -215,7 +224,9 @@ class Usuario(Base):
     aluno_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("alunos.id"), index=True, nullable=True
     )
-    ativo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    ativo: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
 
     aluno: Mapped[Aluno | None] = relationship(back_populates="usuarios")
 
@@ -230,10 +241,11 @@ class Conversa(Base):
     status: Mapped[StatusConversa] = mapped_column(
         _enum_portatil(StatusConversa, "status_conversa"),
         default=StatusConversa.ABERTA,
+        server_default="ABERTA",
         nullable=False,
     )
     data_inicio: Mapped[datetime] = mapped_column(
-        DateTimeUtc, default=_agora, nullable=False
+        DateTimeUtc, default=_agora, server_default=func.now(), nullable=False
     )
     data_fim: Mapped[datetime | None] = mapped_column(DateTimeUtc)
     motivo_fechamento: Mapped[MotivoFechamento | None] = mapped_column(
