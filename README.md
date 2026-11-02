@@ -33,8 +33,12 @@ frontend/ (Angular)  ──►  backend/ (FastAPI)  ──►  Azure AI Foundry 
 ├── backend/                 # API FastAPI
 │   ├── app/
 │   │   ├── main.py          # Cria a aplicação e registra os routers
-│   │   └── api/
-│   │       └── health.py    # Router de healthcheck
+│   │   ├── security.py      # Hash de senha (PBKDF2)
+│   │   ├── api/
+│   │   │   └── health.py    # Router de healthcheck
+│   │   ├── db/              # Base, modelos, sessão e seed
+│   │   └── repositories/    # Camada de acesso a dados
+│   ├── alembic/             # Migrações do schema
 │   ├── tests/               # Testes (pytest)
 │   ├── Dockerfile           # Dev container (uvicorn --reload)
 │   ├── .dockerignore
@@ -76,6 +80,22 @@ cd backend
 .venv/bin/pytest
 ```
 
+**Banco de dados (migrações + seed):**
+
+Sem `DATABASE_URL`, o backend usa `sqlite:///./ead.db` (dev local). Com
+`docker compose up`, a URL aponta para o PostgreSQL do compose.
+
+```bash
+cd backend
+.venv/bin/alembic upgrade head       # cria/atualiza o schema
+.venv/bin/python -m app.db.seed      # admin + aluno demo (idempotente)
+```
+
+O seed cria o login `admin` (papel `ADMIN`) e o login `aluno` (papel `ALUNO`,
+vinculado ao aluno demo), ambos com a senha `demo1234` — uso apenas local.
+O seed se recusa a rodar quando `APP_ENV=production`.
+No Docker: `docker compose exec backend alembic upgrade head`.
+
 ### Frontend (Angular)
 
 ```bash
@@ -97,8 +117,9 @@ curl http://localhost:8000/health
 # {"status": "ok"}
 ```
 
-- Backend: `backend/Dockerfile`, roda `uvicorn --reload`; `backend/app` e
-  `backend/tests` são montados por volume (edição reflete no reload).
+- Backend: `backend/Dockerfile`, roda `uvicorn --reload`; `backend/app`,
+  `backend/tests` e `backend/alembic` são montados por volume (edição reflete
+  no reload).
 - Banco: serviço `db` (postgres:16-alpine), volume `ead_pgdata` persistente.
   O backend só inicia após o healthcheck do banco.
 - Portas no host parametrizáveis: `BACKEND_PORT` (default 8000) e
@@ -124,6 +145,7 @@ Copie `.env.example` para `.env` (na raiz) e preencha conforme o ambiente.
 | `POSTGRES_PORT`            | Porta do Postgres no host (default `5432`)           |
 | `DATABASE_URL`             | URL SQLAlchemy da base (`postgresql+psycopg://…`)    |
 | `BACKEND_PORT`             | Porta do backend no host (default `8000`)            |
+| `APP_ENV`                  | Ambiente da app; `production` bloqueia o seed demo   |
 | `TRIAGEM_LIMIAR_CONFIANCA` | Limiar de confiança p/ HITL (default `0.8`)          |
 | `TRIAGEM_OFFLINE`          | `1` usa classificador offline (sem Azure)            |
 | `MOCK_API_URL`             | Base URL do mock (default `http://127.0.0.1:8000`)   |

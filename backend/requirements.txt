@@ -6,6 +6,11 @@ openai>=1.40
 requests>=2.32
 python-dotenv>=1.0
 
+# Dados (issue #2: schema transacional, migrações e seed)
+sqlalchemy>=2.0
+alembic>=1.13
+psycopg[binary]>=3.2
+
 # Testes (issue #1: estrutura de testes)
 pytest>=8.0
 httpx>=0.27

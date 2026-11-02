@@ -8,12 +8,17 @@ build/
 dist/
 *.egg-info/
 .eggs/
-
+.claude
+.opencode
 # Ambientes virtuais
 .venv/
 venv/
 env/
 ENV/
+
+# Banco SQLite local (dev sem Docker)
+*.db
+*.db-journal
 
 # Testes / cobertura
 .pytest_cache/

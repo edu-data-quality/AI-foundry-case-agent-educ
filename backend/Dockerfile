@@ -16,6 +16,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY tests ./tests
 
+# Migrações e seed (rodar via `docker compose exec backend alembic upgrade head`)
+COPY alembic.ini ./
+COPY alembic ./alembic
+
 EXPOSE 8000
 
 CMD ["sh", "-c", "uvicorn app.main:app --host ${BACKEND_HOST} --port ${BACKEND_PORT} --reload"]
