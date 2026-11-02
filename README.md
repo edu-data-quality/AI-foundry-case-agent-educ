@@ -83,7 +83,9 @@ cd backend
 **Banco de dados (migrações + seed):**
 
 Sem `DATABASE_URL`, o backend usa `sqlite:///./ead.db` (dev local). Com
-`docker compose up`, a URL aponta para o PostgreSQL do compose.
+`docker compose up`, a URL aponta para o PostgreSQL do compose. Por isso
+`DATABASE_URL` vem comentado no `.env.example`: copiar o arquivo sem Docker
+mantém o fluxo `.venv` funcionando no SQLite.
 
 ```bash
 cd backend
