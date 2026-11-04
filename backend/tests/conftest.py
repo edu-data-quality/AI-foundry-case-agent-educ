@@ -8,12 +8,25 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from app.db import models  # noqa: F401  (registra as tabelas na metadata)
 from app.db.base import Base
 from app.db.session import criar_engine
 
 BACKEND = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(autouse=True)
+def segredo_jwt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ambiente mínimo de autenticação para todos os testes.
+
+    Os módulos leem o segredo e o TTL no momento da chamada, então setar aqui
+    basta para emissão e validação de tokens tanto nesses testes quanto nos de
+    `test_auth_api.py`.
+    """
+    monkeypatch.setenv("JWT_SECRET", "segredo-de-teste-pytest-0123456789abcdef")
+    monkeypatch.setenv("JWT_EXPIRA_MINUTOS", "60")
 
 
 def aplicar_migracoes(url: str) -> None:
@@ -26,8 +39,16 @@ def aplicar_migracoes(url: str) -> None:
 
 @pytest.fixture()
 def sessao() -> Iterator[Session]:
-    """Sessão SQLite em memória criada por `create_all` (rápida, para unidades)."""
-    engine = criar_engine("sqlite://")
+    """Sessão SQLite em memória criada por `create_all` (rápida, para unidades).
+
+    `StaticPool` mantém UMA conexão para toda a engine: sem isso, cada request
+    do TestClient abriria um banco em memória separado e vazio.
+    """
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
