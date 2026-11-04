@@ -6,6 +6,7 @@
 
 import os
 import sqlite3
+from collections.abc import Iterator
 from typing import Any
 
 from dotenv import load_dotenv
@@ -53,3 +54,9 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 def get_session() -> Session:
     """Sessão nova para uso em repositórios e scripts."""
     return SessionLocal()
+
+
+def get_db() -> Iterator[Session]:
+    """Dependência do FastAPI: uma sessão por request, fechada ao final."""
+    with SessionLocal() as sessao:
+        yield sessao
