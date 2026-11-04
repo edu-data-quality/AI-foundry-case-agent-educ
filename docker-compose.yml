@@ -17,6 +17,10 @@ services:
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-ead}:${POSTGRES_PASSWORD:-ead}@db:5432/${POSTGRES_DB:-ead}
       # Guard do seed demo depende do ambiente (ver app/db/seed.py)
       - APP_ENV=${APP_ENV:-development}
+      # Assinatura dos JWTs (issue #3). Chave default só para dev local;
+      # exija um segredo forte e único em qualquer ambiente real.
+      - JWT_SECRET=${JWT_SECRET:-chave-jwt-dev-nao-usar-em-prod-0123456789abcdef}
+      - JWT_EXPIRA_MINUTOS=${JWT_EXPIRA_MINUTOS:-60}
 
   db:
     image: postgres:16-alpine
