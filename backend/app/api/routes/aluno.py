@@ -1,8 +1,10 @@
-"""Status académico do aluno (issue #4 / US1.2 do PRD).
+"""Status acadêmico do aluno (issue #4 / US1.2 do PRD).
 
 Regra de escopo:
 - `ALUNO` consulta apenas o próprio CPF; outro CPF recebe 403.
 - `ADMIN` consulta qualquer CPF (painel administrativo e tools do Foundry).
+- `ALUNO` nunca recebe 404: CPF diferente do próprio responde 403, inclusive
+  quando não existe, para não permitir enumeração de CPFs cadastrados.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_usuario_atual
-from app.db.models import RoleUsuario, StatusDisciplina, StatusMatricula, Usuario
+from app.db.models import Aluno, RoleUsuario, StatusDisciplina, StatusMatricula, Usuario
 from app.db.session import get_db
 from app.repositories.academico import MatriculaRepository
 from app.repositories.alunos import AlunoRepository
@@ -19,7 +21,7 @@ router = APIRouter(prefix="/api/aluno", tags=["aluno"])
 
 
 class DadosAluno(BaseModel):
-    """Dados cadastrais básicos exibidos junto ao status académico."""
+    """Dados cadastrais básicos exibidos junto ao status acadêmico."""
 
     id: str
     cpf: str
@@ -50,7 +52,7 @@ class StatusAcademicoResposta(BaseModel):
     disciplinas: list[DisciplinaStatus]
 
 
-def _resolver_aluno(usuario: Usuario, cpf: str, sessao: Session):
+def _resolver_aluno(usuario: Usuario, cpf: str, sessao: Session) -> Aluno:
     """Resolve o aluno do request respeitando o escopo da role.
 
     Para `ALUNO`, a identidade vem do token (`usuario.aluno`), nunca do CPF
@@ -79,7 +81,8 @@ def _resolver_aluno(usuario: Usuario, cpf: str, sessao: Session):
     response_model=StatusAcademicoResposta,
     responses={
         403: {"description": "Aluno autenticado consultando CPF de outro aluno"},
-        404: {"description": "CPF não cadastrado"},
+        404: {"description": "CPF não cadastrado (consulta de ADMIN)"},
+        422: {"description": "CPF fora do formato de 11 dígitos"},
     },
 )
 def status_academico(
@@ -93,8 +96,9 @@ def status_academico(
 ) -> StatusAcademicoResposta:
     """Retorna dados do aluno e notas/situação por disciplina.
 
-    Erros: 401 sem token válido, 403 para aluno consultando outro CPF,
-    404 para CPF inexistente (quando quem consulta é ADMIN).
+    Erros: 401 sem token válido; 403 para aluno consultando outro CPF,
+    inclusive inexistente, para evitar enumeração; 404 para CPF inexistente
+    consultado por ADMIN; 422 para CPF fora do formato de 11 dígitos.
     """
     aluno = _resolver_aluno(usuario, cpf, sessao)
     matriculas = MatriculaRepository(sessao).listar_por_aluno(aluno.id)

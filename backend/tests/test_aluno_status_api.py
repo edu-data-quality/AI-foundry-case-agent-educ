@@ -1,4 +1,4 @@
-"""Testes do status académico do aluno (issue #4 / US1.2).
+"""Testes do status acadêmico do aluno (issue #4 / US1.2).
 
 Critérios de aceitação cobertos:
 - aluno autenticado recebe as próprias notas;
@@ -154,6 +154,19 @@ def test_admin_consulta_status_de_qualquer_aluno(
     assert len(response.json()["disciplinas"]) == 2
 
 
+def test_aluno_consultando_cpf_inexistente_retorna_403(
+    sessao: Session, client: TestClient
+) -> None:
+    """ALUNO nunca recebe 404: CPF desconhecido também é 403 (sem enumeração)."""
+    _montar_dados(sessao)
+    _fazer_login(client, "aluna", "aluna123")
+
+    response = client.get("/api/aluno/status", params={"cpf": "99999999999"})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "acesso restrito aos próprios dados"
+
+
 def test_cpf_inexistente_retorna_404(sessao: Session, client: TestClient) -> None:
     _montar_dados(sessao)
     _fazer_login(client, "admin", "admin123")
@@ -204,3 +217,4 @@ def test_endpoint_documentado_no_openapi() -> None:
     assert "200" in operacao["responses"]
     assert "403" in operacao["responses"]
     assert "404" in operacao["responses"]
+    assert "422" in operacao["responses"]
