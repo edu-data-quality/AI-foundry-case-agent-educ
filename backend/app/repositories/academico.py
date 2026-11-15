@@ -85,6 +85,10 @@ class MatriculaRepository:
         self._sessao.commit()
         return matricula
 
+    def buscar_por_id(self, matricula_id: uuid.UUID) -> MatriculaDisciplina | None:
+        """Busca uma matrícula pelo id interno."""
+        return self._sessao.get(MatriculaDisciplina, matricula_id)
+
     def listar_por_aluno(self, aluno_id: uuid.UUID) -> list[MatriculaDisciplina]:
         """Lista as matrículas do aluno com a disciplina carregada."""
         return list(

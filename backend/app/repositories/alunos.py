@@ -43,6 +43,17 @@ class AlunoRepository:
         """Busca pelo id interno."""
         return self._sessao.get(Aluno, aluno_id)
 
+    def atualizar_status_matricula(
+        self, aluno_id: uuid.UUID, *, status_matricula: StatusMatricula
+    ) -> Aluno:
+        """Altera o status de matrícula do aluno."""
+        aluno = self.buscar_por_id(aluno_id)
+        if aluno is None:
+            raise ValueError(f"aluno {aluno_id} não encontrado")
+        aluno.status_matricula = status_matricula
+        self._sessao.commit()
+        return aluno
+
     def buscar_por_cpf(self, cpf: str) -> Aluno | None:
         """Busca pelo CPF, chave de identificação usada pelas tools."""
         return self._sessao.scalar(select(Aluno).where(Aluno.cpf == cpf))
