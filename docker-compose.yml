@@ -21,6 +21,10 @@ services:
       # exija um segredo forte e único em qualquer ambiente real.
       - JWT_SECRET=${JWT_SECRET:-chave-jwt-dev-nao-usar-em-prod-0123456789abcdef}
       - JWT_EXPIRA_MINUTOS=${JWT_EXPIRA_MINUTOS:-60}
+      # Envio de declarações (issue #6). Sem chave, o envio é simulado.
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - "RESEND_FROM=${RESEND_FROM:-Assistente Acadêmico EAD <onboarding@resend.dev>}"
+      - RESEND_TIMEOUT_SEGUNDOS=${RESEND_TIMEOUT_SEGUNDOS:-10}
 
   db:
     image: postgres:16-alpine

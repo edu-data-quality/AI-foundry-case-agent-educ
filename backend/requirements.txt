@@ -6,6 +6,10 @@ openai>=1.40
 requests>=2.32
 python-dotenv>=1.0
 
+# Documentos (issue #6: declaração de matrícula em PDF + envio por e-mail)
+fpdf2>=2.8
+email-validator>=2.1
+
 # Dados (issue #2: schema transacional, migrações e seed)
 sqlalchemy>=2.0
 alembic>=1.13
