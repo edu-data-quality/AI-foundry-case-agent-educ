@@ -23,10 +23,9 @@ class ConversaRepository:
     ) -> Conversa:
         """Abre uma conversa para o aluno.
 
-        O histórico aceita várias sessões por aluno (inclusive mais de uma
-        ABERTA, se uma sessão antiga não teve TIMEOUT registrado). `abrir` não
-        recusa: quem consulta usa `buscar_aberta_por_aluno`, que devolve a
-        mais recente.
+        O banco garante no máximo uma ABERTA por aluno (índice único parcial).
+        Prefira `abrir_ou_continuar` em fluxos de login/chat: chamar `abrir`
+        com uma sessão já ABERTA levanta `IntegrityError`.
         """
         conversa = Conversa(
             aluno_id=aluno_id,
@@ -43,13 +42,15 @@ class ConversaRepository:
         """Retorna a sessão ABERTA do aluno ou abre uma nova.
 
         Regra de negócio: no máximo uma conversa ABERTA por aluno. Se já
-        existe, a sessão é retomada (e o `thread_id_foundry` é preenchido
-        quando ainda estava vazio).
+        existe, a sessão é retomada, a última interação é atualizada (o
+        timeout recomeça) e o `thread_id_foundry` é preenchido quando ainda
+        estava vazio.
         """
         conversa = self.buscar_aberta_por_aluno(aluno_id)
         if conversa is None:
             return self.abrir(aluno_id, thread_id_foundry)
 
+        conversa = self.registrar_interacao(conversa.id)
         if thread_id_foundry and conversa.thread_id_foundry != thread_id_foundry:
             conversa.thread_id_foundry = thread_id_foundry
             self._sessao.commit()
@@ -58,7 +59,12 @@ class ConversaRepository:
     def registrar_interacao(
         self, conversa_id: uuid.UUID, quando: datetime | None = None
     ) -> Conversa:
-        """Atualiza a última interação, adiando o timeout da sessão."""
+        """Atualiza a última interação, adiando o timeout da sessão.
+
+        Chamado por `abrir_ou_continuar` (login/reabertura). A integração do
+        chat (S12) deve chamar a cada mensagem recebida para que o job meça
+        inatividade real, e não o tempo desde o login.
+        """
         conversa = self.buscar_por_id(conversa_id)
         if conversa is None:
             raise ValueError(f"conversa {conversa_id} não encontrada")
@@ -116,11 +122,11 @@ class ConversaRepository:
         return self._sessao.get(Conversa, conversa_id)
 
     def buscar_aberta_por_aluno(self, aluno_id: uuid.UUID) -> Conversa | None:
-        """Retorna a conversa ABERTA mais recente do aluno, se existir.
+        """Retorna a conversa ABERTA do aluno, se existir.
 
-        `first()` com ordenação decrescente (nunca `one_or_none()`): sessões
-        antigas sem TIMEOUT podem deixar mais de uma linha ABERTA, e uma
-        consulta estrita estouraria `MultipleResultsFound` (HTTP 500).
+        O índice único parcial garante no máximo uma ABERTA por aluno; o
+        `first()` com ordenação decrescente é defensivo para bases antigas
+        criadas antes da migração 0002.
         """
         return self._sessao.scalars(
             select(Conversa)

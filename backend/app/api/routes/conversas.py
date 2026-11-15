@@ -15,7 +15,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_usuario_atual
+from app.api.deps import (
+    exigir_aluno,
+    garantir_acesso_aluno,
+    get_usuario_atual,
+)
 from app.db.models import (
     Conversa,
     MotivoFechamento,
@@ -71,23 +75,12 @@ def _serializar(conversa: Conversa) -> ConversaResposta:
 
 def _aluno_id_do_usuario(usuario: Usuario) -> uuid.UUID:
     """Identidade do aluno autenticado; ADMIN não abre sessão de aluno."""
-    if usuario.role is not RoleUsuario.ALUNO or usuario.aluno_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="apenas o aluno autenticado abre a própria sessão",
-        )
-    return usuario.aluno_id
+    return exigir_aluno(usuario)
 
 
 def _autorizar_conversa(usuario: Usuario, conversa: Conversa) -> None:
     """Aluno só acessa a própria sessão; ADMIN acessa qualquer uma."""
-    if usuario.role is RoleUsuario.ADMIN:
-        return
-    if usuario.aluno_id is None or conversa.aluno_id != usuario.aluno_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="acesso restrito às próprias sessões",
-        )
+    garantir_acesso_aluno(usuario, conversa.aluno_id)
 
 
 @router.post(

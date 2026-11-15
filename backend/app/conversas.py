@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
+from app.config import int_env
 from app.db.models import Conversa
 from app.db.session import get_session
 from app.repositories.conversas import ConversaRepository
@@ -29,26 +30,23 @@ INTERVALO_VERIFICACAO_PADRAO_SEGUNDOS = 60
 
 def timeout_minutos() -> int:
     """Inatividade máxima da sessão em minutos (`THREAD_TIMEOUT_MIN`)."""
-    raw = os.getenv("THREAD_TIMEOUT_MIN", str(TIMEOUT_PADRAO_MINUTOS))
-    try:
-        return max(1, int(raw))
-    except ValueError:
-        return TIMEOUT_PADRAO_MINUTOS
+    return int_env("THREAD_TIMEOUT_MIN", TIMEOUT_PADRAO_MINUTOS)
 
 
 def intervalo_verificacao_segundos() -> int:
     """Intervalo entre varreduras do job (`THREAD_TIMEOUT_CHECK_SEGUNDOS`)."""
-    raw = os.getenv(
-        "THREAD_TIMEOUT_CHECK_SEGUNDOS", str(INTERVALO_VERIFICACAO_PADRAO_SEGUNDOS)
+    return int_env(
+        "THREAD_TIMEOUT_CHECK_SEGUNDOS", INTERVALO_VERIFICACAO_PADRAO_SEGUNDOS
     )
-    try:
-        return max(1, int(raw))
-    except ValueError:
-        return INTERVALO_VERIFICACAO_PADRAO_SEGUNDOS
 
 
 def job_ativo() -> bool:
-    """Permite desligar o job (testes/CLI) com `THREAD_TIMEOUT_JOB_ATIVO=0`."""
+    """Liga/desliga o job neste processo (`THREAD_TIMEOUT_JOB_ATIVO`).
+
+    Com mais de um worker (uvicorn/gunicorn), o job deve rodar em apenas um
+    deles para não haver varreduras concorrentes. O operador liga a variável
+    só no worker líder; os demais sobem com `THREAD_TIMEOUT_JOB_ATIVO=0`.
+    """
     return os.getenv("THREAD_TIMEOUT_JOB_ATIVO", "1").strip().lower() not in {
         "0",
         "false",

@@ -20,6 +20,8 @@ from pathlib import Path
 import requests
 from fpdf import FPDF
 
+from app.config import int_env
+
 LOGGER = logging.getLogger(__name__)
 
 URL_RESEND = "https://api.resend.com/emails"
@@ -88,11 +90,7 @@ def gerar_pdf_matricula(dados: DadosDeclaracao, *, data: date | None = None) -> 
 
 def _timeout_segundos() -> int:
     """Timeout HTTP do Resend em segundos (padrão 10)."""
-    raw = os.getenv("RESEND_TIMEOUT_SEGUNDOS", str(TIMEOUT_PADRAO_SEGUNDOS))
-    try:
-        return max(1, int(raw))
-    except ValueError:
-        return TIMEOUT_PADRAO_SEGUNDOS
+    return int_env("RESEND_TIMEOUT_SEGUNDOS", TIMEOUT_PADRAO_SEGUNDOS)
 
 
 def _corpo_email(dados: DadosDeclaracao, *, data: date | None = None) -> str:

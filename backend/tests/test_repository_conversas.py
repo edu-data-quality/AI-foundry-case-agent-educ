@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import MotivoFechamento, StatusConversa
@@ -59,18 +60,29 @@ def test_conversa_fechada_nao_pode_ser_fechada_de_novo(sessao: Session) -> None:
         repo.fechar(conversa.id, MotivoFechamento.TIMEOUT)
 
 
-def test_busca_aberta_devolve_a_mais_recente(sessao: Session) -> None:
-    """Sessão antiga sem TIMEOUT não pode quebrar a consulta (era 500)."""
+def test_indice_unico_impede_duas_abertas_por_aluno(sessao: Session) -> None:
+    """A regra "uma ABERTA por aluno" é garantida pelo banco."""
     aluno = _criar_aluno(sessao)
     repo = ConversaRepository(sessao)
-    antiga = repo.abrir(aluno.id, thread_id_foundry="thread-antiga")
-    antiga.data_inicio = antiga.data_inicio - timedelta(days=1)
+    repo.abrir(aluno.id)
+
+    with pytest.raises(IntegrityError):
+        repo.abrir(aluno.id)
+    sessao.rollback()
+
+
+def test_abrir_ou_continuar_revigora_o_timeout(sessao: Session) -> None:
+    aluno = _criar_aluno(sessao)
+    repo = ConversaRepository(sessao)
+    conversa = repo.abrir(aluno.id)
+    conversa.ultima_interacao = conversa.ultima_interacao - timedelta(minutes=30)
     sessao.commit()
+    antiga = conversa.ultima_interacao
 
-    nova = repo.abrir(aluno.id, thread_id_foundry="thread-nova")
+    retomada = repo.abrir_ou_continuar(aluno.id)
 
-    assert repo.buscar_aberta_por_aluno(aluno.id).id == nova.id
-    assert antiga.status is StatusConversa.ABERTA
+    assert retomada.id == conversa.id
+    assert retomada.ultima_interacao > antiga
 
 
 def test_busca_conversa_aberta_do_aluno(sessao: Session) -> None:

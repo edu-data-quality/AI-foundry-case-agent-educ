@@ -21,12 +21,14 @@ from sqlalchemy import (
     Enum as SAEnum,
     Float,
     ForeignKey,
+    Index,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     Uuid,
     func,
+    text,
     true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -235,6 +237,17 @@ class Conversa(Base):
     """Registro de sessão do aluno no chat, para rastreio E2E."""
 
     __tablename__ = "conversas"
+    __table_args__ = (
+        # Regra "uma ABERTA por aluno" garantida pelo banco, não só pela
+        # aplicação. Índice parcial: sessões FECHADAS não entram na unicidade.
+        Index(
+            "uq_conversas_aluno_aberta",
+            "aluno_id",
+            unique=True,
+            sqlite_where=text("status = 'ABERTA'"),
+            postgresql_where=text("status = 'ABERTA'"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     aluno_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("alunos.id"), index=True, nullable=False)

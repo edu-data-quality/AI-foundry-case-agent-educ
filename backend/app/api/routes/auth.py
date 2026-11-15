@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 
 from app import auth
 from app.api.deps import get_usuario_atual
-from app.db.models import Usuario
+from app.db.models import MotivoFechamento, RoleUsuario, Usuario
 from app.db.session import get_db
+from app.repositories.conversas import ConversaRepository
 from app.repositories.usuarios import UsuarioRepository
 from app.security import verificar_senha
 
@@ -28,6 +29,14 @@ class TokenResposta(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     role: str
+    # Sessão de chat aberta/retomada no login (apenas ALUNO).
+    conversa_id: str | None = None
+
+
+class LogoutResposta(BaseModel):
+    """Sessão fechada no logout (None quando não havia sessão ABERTA)."""
+
+    conversa_id: str | None = None
 
 
 class UsuarioAtual(BaseModel):
@@ -61,11 +70,37 @@ def login(payload: LoginRequest, sessao: Session = Depends(get_db)) -> TokenResp
         login=usuario.login,
         role=usuario.role.value,
     )
+    conversa_id: str | None = None
+    if usuario.role is RoleUsuario.ALUNO and usuario.aluno_id is not None:
+        conversa = ConversaRepository(sessao).abrir_ou_continuar(usuario.aluno_id)
+        conversa_id = str(conversa.id)
     return TokenResposta(
         access_token=token,
         expires_in=auth.tempo_de_vida_minutos() * 60,
         role=usuario.role.value,
+        conversa_id=conversa_id,
     )
+
+
+@router.post("/logout", response_model=LogoutResposta, status_code=status.HTTP_200_OK)
+def logout(
+    usuario: Usuario = Depends(get_usuario_atual),
+    sessao: Session = Depends(get_db),
+) -> LogoutResposta:
+    """Fecha a sessão ABERTA do aluno com motivo LOGOUT.
+
+    Idempotente: sem sessão ABERTA (ou para ADMIN), devolve `conversa_id`
+    nulo. O token continua válido até expirar; o front deve descartá-lo.
+    """
+    if usuario.role is not RoleUsuario.ALUNO or usuario.aluno_id is None:
+        return LogoutResposta()
+
+    repo = ConversaRepository(sessao)
+    conversa = repo.buscar_aberta_por_aluno(usuario.aluno_id)
+    if conversa is None:
+        return LogoutResposta()
+    fechada = repo.fechar(conversa.id, MotivoFechamento.LOGOUT)
+    return LogoutResposta(conversa_id=str(fechada.id))
 
 
 @router.get("/me", response_model=UsuarioAtual)

@@ -28,7 +28,18 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
+    # Regra "uma ABERTA por aluno" no banco. Índice parcial: só as linhas
+    # ABERTAS disputam a unicidade por aluno.
+    op.create_index(
+        "uq_conversas_aluno_aberta",
+        "conversas",
+        ["aluno_id"],
+        unique=True,
+        sqlite_where=sa.text("status = 'ABERTA'"),
+        postgresql_where=sa.text("status = 'ABERTA'"),
+    )
 
 
 def downgrade() -> None:
+    op.drop_index("uq_conversas_aluno_aberta", table_name="conversas")
     op.drop_column("conversas", "ultima_interacao")

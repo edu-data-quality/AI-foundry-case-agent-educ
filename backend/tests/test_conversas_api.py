@@ -98,6 +98,22 @@ def test_reabrir_retoma_a_mesma_conversa(sessao: Session, client: TestClient) ->
     assert len(ConversaRepository(sessao).listar(aluno_id=usuario_aluno.aluno_id)) == 1
 
 
+def test_reabrir_revigora_o_timeout(sessao: Session, client: TestClient) -> None:
+    _, usuario_aluno, _ = _montar_usuarios(sessao)
+    _autenticar(client, usuario_aluno)
+    conversa = client.post("/api/conversas").json()
+    repo = ConversaRepository(sessao)
+    registro = repo.buscar_por_id(uuid.UUID(conversa["id"]))
+    registro.ultima_interacao = datetime.now(timezone.utc) - timedelta(minutes=30)
+    sessao.commit()
+    antiga = registro.ultima_interacao
+
+    retomada = client.post("/api/conversas").json()
+
+    assert retomada["id"] == conversa["id"]
+    assert datetime.fromisoformat(retomada["ultima_interacao"]) > antiga
+
+
 def test_thread_id_do_foundry_e_registrado(sessao: Session, client: TestClient) -> None:
     _, usuario_aluno, _ = _montar_usuarios(sessao)
     _autenticar(client, usuario_aluno)
