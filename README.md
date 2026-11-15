@@ -141,6 +141,9 @@ Copie `.env.example` para `.env` (na raiz) e preencha conforme o ambiente.
 | `AZURE_OPENAI_ENDPOINT`    | Endpoint do recurso (`https://<x>.openai.azure.com/`) |
 | `AZURE_OPENAI_API_VERSION` | Versão da API (default `2024-10-21`)                 |
 | `AZURE_OPENAI_DEPLOYMENT`  | Nome do deployment (default `gpt-4o`)                |
+| `RESEND_API_KEY`           | Chave do Resend; sem ela o envio de declaração é simulado |
+| `RESEND_FROM`              | Remetente do e-mail (default `onboarding@resend.dev`) |
+| `RESEND_TIMEOUT_SEGUNDOS`  | Timeout HTTP do Resend (default `10`)                |
 | `POSTGRES_USER`            | Usuário do banco no compose (default `ead`)          |
 | `POSTGRES_PASSWORD`        | Senha do banco no compose (default `ead`)            |
 | `POSTGRES_DB`              | Base no compose (default `ead`)                      |
