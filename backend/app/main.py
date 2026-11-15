@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from app.api.health import router as health_router
+from app.api.routes.admin import router as admin_router
 from app.api.routes.aluno import router as aluno_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.declaracoes import router as declaracoes_router
@@ -19,3 +20,4 @@ app.include_router(auth_router)
 app.include_router(aluno_router)
 app.include_router(financeiro_router)
 app.include_router(declaracoes_router)
+app.include_router(admin_router)

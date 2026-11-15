@@ -51,6 +51,21 @@ class MensalidadeRepository:
             )
         )
 
+    def buscar_por_id(self, mensalidade_id: uuid.UUID) -> Mensalidade | None:
+        """Busca uma mensalidade pelo id interno."""
+        return self._sessao.get(Mensalidade, mensalidade_id)
+
+    def atualizar_status(
+        self, mensalidade_id: uuid.UUID, *, status_pagamento: StatusPagamento
+    ) -> Mensalidade:
+        """Altera o status de pagamento de uma mensalidade."""
+        mensalidade = self.buscar_por_id(mensalidade_id)
+        if mensalidade is None:
+            raise ValueError(f"mensalidade {mensalidade_id} não encontrada")
+        mensalidade.status_pagamento = status_pagamento
+        self._sessao.commit()
+        return mensalidade
+
     def listar_em_aberto_por_aluno(self, aluno_id: uuid.UUID) -> list[Mensalidade]:
         """Lista boletos ainda não pagos (pendentes ou atrasados)."""
         return list(
