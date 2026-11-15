@@ -25,6 +25,10 @@ services:
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - "RESEND_FROM=${RESEND_FROM:-Assistente Acadêmico EAD <onboarding@resend.dev>}"
       - RESEND_TIMEOUT_SEGUNDOS=${RESEND_TIMEOUT_SEGUNDOS:-10}
+      # Sessões do chat (issue #11): timeout por inatividade e job de varredura.
+      - THREAD_TIMEOUT_MIN=${THREAD_TIMEOUT_MIN:-10}
+      - THREAD_TIMEOUT_CHECK_SEGUNDOS=${THREAD_TIMEOUT_CHECK_SEGUNDOS:-60}
+      - THREAD_TIMEOUT_JOB_ATIVO=${THREAD_TIMEOUT_JOB_ATIVO:-1}
 
   db:
     image: postgres:16-alpine

@@ -247,6 +247,12 @@ class Conversa(Base):
     data_inicio: Mapped[datetime] = mapped_column(
         DateTimeUtc, default=_agora, server_default=func.now(), nullable=False
     )
+    # Referência do job de timeout: última mensagem/interação do aluno na
+    # sessão. Sem esta coluna, um chat longo seria fechado por TIMEOUT mesmo
+    # com o aluno ativo.
+    ultima_interacao: Mapped[datetime] = mapped_column(
+        DateTimeUtc, default=_agora, server_default=func.now(), nullable=False
+    )
     data_fim: Mapped[datetime | None] = mapped_column(DateTimeUtc)
     motivo_fechamento: Mapped[MotivoFechamento | None] = mapped_column(
         _enum_portatil(MotivoFechamento, "motivo_fechamento")
