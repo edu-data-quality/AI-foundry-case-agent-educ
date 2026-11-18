@@ -5,8 +5,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import auth
-from app.api.deps import get_usuario_atual
-from app.db.models import MotivoFechamento, RoleUsuario, Usuario
+from app.api.deps import aluno_id_do_usuario, get_usuario_atual
+from app.db.models import MotivoFechamento, Usuario
 from app.db.session import get_db
 from app.repositories.conversas import ConversaRepository
 from app.repositories.usuarios import UsuarioRepository
@@ -71,8 +71,9 @@ def login(payload: LoginRequest, sessao: Session = Depends(get_db)) -> TokenResp
         role=usuario.role.value,
     )
     conversa_id: str | None = None
-    if usuario.role is RoleUsuario.ALUNO and usuario.aluno_id is not None:
-        conversa = ConversaRepository(sessao).abrir_ou_continuar(usuario.aluno_id)
+    aluno_id = aluno_id_do_usuario(usuario)
+    if aluno_id is not None:
+        conversa = ConversaRepository(sessao).abrir_ou_continuar(aluno_id)
         conversa_id = str(conversa.id)
     return TokenResposta(
         access_token=token,
@@ -92,11 +93,12 @@ def logout(
     Idempotente: sem sessão ABERTA (ou para ADMIN), devolve `conversa_id`
     nulo. O token continua válido até expirar; o front deve descartá-lo.
     """
-    if usuario.role is not RoleUsuario.ALUNO or usuario.aluno_id is None:
+    aluno_id = aluno_id_do_usuario(usuario)
+    if aluno_id is None:
         return LogoutResposta()
 
     repo = ConversaRepository(sessao)
-    conversa = repo.buscar_aberta_por_aluno(usuario.aluno_id)
+    conversa = repo.buscar_aberta_por_aluno(aluno_id)
     if conversa is None:
         return LogoutResposta()
     fechada = repo.fechar(conversa.id, MotivoFechamento.LOGOUT)

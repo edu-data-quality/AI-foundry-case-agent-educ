@@ -220,6 +220,26 @@ def test_aluno_nao_filtra_por_outro_aluno(sessao: Session, client: TestClient) -
     assert response.status_code == 403
 
 
+def test_aluno_sem_vinculo_nao_lista_sessoes_de_todos(
+    sessao: Session, client: TestClient
+) -> None:
+    """ALUNO sem `aluno_id` não pode cair no filtro `None` (que lista tudo)."""
+    _, usuario_aluno, _ = _montar_usuarios(sessao)
+    _autenticar(client, usuario_aluno)
+    client.post("/api/conversas")
+
+    sem_vinculo = UsuarioRepository(sessao).criar(
+        login="sem-vinculo",
+        senha_hash=hash_senha("sem123"),
+        role=RoleUsuario.ALUNO,
+    )
+    _autenticar(client, sem_vinculo)
+
+    response = client.get("/api/conversas")
+
+    assert response.status_code == 403
+
+
 def test_admin_lista_todas_as_sessoes(sessao: Session, client: TestClient) -> None:
     admin, usuario_aluno, usuario_outro = _montar_usuarios(sessao)
     _autenticar(client, usuario_aluno)

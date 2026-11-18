@@ -73,16 +73,6 @@ def _serializar(conversa: Conversa) -> ConversaResposta:
     )
 
 
-def _aluno_id_do_usuario(usuario: Usuario) -> uuid.UUID:
-    """Identidade do aluno autenticado; ADMIN não abre sessão de aluno."""
-    return exigir_aluno(usuario)
-
-
-def _autorizar_conversa(usuario: Usuario, conversa: Conversa) -> None:
-    """Aluno só acessa a própria sessão; ADMIN acessa qualquer uma."""
-    garantir_acesso_aluno(usuario, conversa.aluno_id)
-
-
 @router.post(
     "",
     response_model=ConversaResposta,
@@ -98,7 +88,7 @@ def abrir_conversa(
     sessao: Session = Depends(get_db),
 ) -> ConversaResposta:
     """Abre a sessão do aluno logado ou retoma a que já está ABERTA."""
-    aluno_id = _aluno_id_do_usuario(usuario)
+    aluno_id = exigir_aluno(usuario)
     conversa = ConversaRepository(sessao).abrir_ou_continuar(
         aluno_id, payload.thread_id_foundry if payload else None
     )
@@ -128,7 +118,7 @@ def fechar_conversa(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="conversa não encontrada",
         )
-    _autorizar_conversa(usuario, conversa)
+    garantir_acesso_aluno(usuario, conversa.aluno_id)
     try:
         fechada = repo.fechar(conversa_id, MotivoFechamento.LOGOUT)
     except ValueError as exc:
@@ -163,12 +153,15 @@ def listar_conversas(
     if usuario.role is RoleUsuario.ADMIN:
         filtro = aluno_id
     else:
-        if aluno_id is not None and aluno_id != usuario.aluno_id:
+        # `exigir_aluno` recusa ALUNO sem vínculo; sem isso o filtro viraria
+        # `None` e a listagem devolveria as sessões de todos os alunos.
+        proprio = exigir_aluno(usuario)
+        if aluno_id is not None and aluno_id != proprio:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="acesso restrito às próprias sessões",
             )
-        filtro = usuario.aluno_id
+        filtro = proprio
 
     conversas = ConversaRepository(sessao).listar(
         aluno_id=filtro, limite=limite, offset=offset
@@ -197,5 +190,5 @@ def detalhar_conversa(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="conversa não encontrada",
         )
-    _autorizar_conversa(usuario, conversa)
+    garantir_acesso_aluno(usuario, conversa.aluno_id)
     return _serializar(conversa)

@@ -85,6 +85,30 @@ def test_abrir_ou_continuar_revigora_o_timeout(sessao: Session) -> None:
     assert retomada.ultima_interacao > antiga
 
 
+def test_corrida_de_login_retoma_a_sessao_vencedora(
+    sessao: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dois logins simultâneos: o perdedor do INSERT retoma em vez de 500."""
+    aluno = _criar_aluno(sessao)
+    repo = ConversaRepository(sessao)
+    existente = repo.abrir(aluno.id)
+    original = repo.buscar_aberta_por_aluno
+    chamadas: list = []
+
+    def busca_sem_ver_a_sessao(aluno_id):
+        chamadas.append(aluno_id)
+        if len(chamadas) == 1:
+            return None
+        return original(aluno_id)
+
+    monkeypatch.setattr(repo, "buscar_aberta_por_aluno", busca_sem_ver_a_sessao)
+
+    retomada = repo.abrir_ou_continuar(aluno.id)
+
+    assert retomada.id == existente.id
+    assert len(chamadas) == 2
+
+
 def test_busca_conversa_aberta_do_aluno(sessao: Session) -> None:
     aluno = _criar_aluno(sessao)
     repo = ConversaRepository(sessao)

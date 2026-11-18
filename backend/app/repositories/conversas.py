@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import Conversa, MotivoFechamento, StatusConversa
@@ -45,10 +46,21 @@ class ConversaRepository:
         existe, a sessão é retomada, a última interação é atualizada (o
         timeout recomeça) e o `thread_id_foundry` é preenchido quando ainda
         estava vazio.
+
+        Login concorrente: dois logins podem passar juntos pelo `buscar` e o
+        segundo INSERT bate no índice único. Nesse caso o `IntegrityError` é
+        tratado como "outro login abriu a sessão": recarrega e retoma.
         """
         conversa = self.buscar_aberta_por_aluno(aluno_id)
         if conversa is None:
-            return self.abrir(aluno_id, thread_id_foundry)
+            try:
+                return self.abrir(aluno_id, thread_id_foundry)
+            except IntegrityError:
+                self._sessao.rollback()
+                conversa = self.buscar_aberta_por_aluno(aluno_id)
+                if conversa is None:
+                    raise
+                return self.registrar_interacao(conversa.id)
 
         conversa = self.registrar_interacao(conversa.id)
         if thread_id_foundry and conversa.thread_id_foundry != thread_id_foundry:
@@ -84,9 +96,7 @@ class ConversaRepository:
         )
         agora = datetime.now(timezone.utc)
         for conversa in conversas:
-            conversa.status = StatusConversa.FECHADA
-            conversa.motivo_fechamento = MotivoFechamento.TIMEOUT
-            conversa.data_fim = agora
+            self._marcar_fechada(conversa, MotivoFechamento.TIMEOUT, agora)
         if conversas:
             self._sessao.commit()
         return conversas
@@ -111,11 +121,18 @@ class ConversaRepository:
             raise ValueError(f"conversa {conversa_id} não encontrada")
         if conversa.status is StatusConversa.FECHADA:
             raise ValueError(f"conversa {conversa_id} já está fechada")
-        conversa.status = StatusConversa.FECHADA
-        conversa.motivo_fechamento = motivo
-        conversa.data_fim = datetime.now(timezone.utc)
+        self._marcar_fechada(conversa, motivo, datetime.now(timezone.utc))
         self._sessao.commit()
         return conversa
+
+    @staticmethod
+    def _marcar_fechada(
+        conversa: Conversa, motivo: MotivoFechamento, quando: datetime
+    ) -> None:
+        """Aplica status, motivo e data de fim (sem commit)."""
+        conversa.status = StatusConversa.FECHADA
+        conversa.motivo_fechamento = motivo
+        conversa.data_fim = quando
 
     def buscar_por_id(self, conversa_id: uuid.UUID) -> Conversa | None:
         """Busca pelo id interno."""
