@@ -115,19 +115,41 @@ def test_reabrir_revigora_o_timeout(sessao: Session, client: TestClient) -> None
 
 
 def test_thread_id_do_foundry_e_registrado(sessao: Session, client: TestClient) -> None:
+    """O aluno não vincula thread: o valor enviado é ignorado."""
     _, usuario_aluno, _ = _montar_usuarios(sessao)
     _autenticar(client, usuario_aluno)
 
     corpo = client.post(
         "/api/conversas", json={"thread_id_foundry": "thread-abc"}
     ).json()
-    assert corpo["thread_id_foundry"] == "thread-abc"
+    assert corpo["thread_id_foundry"] is None
 
     retomada = client.post(
         "/api/conversas", json={"thread_id_foundry": "thread-abc"}
     ).json()
     assert retomada["id"] == corpo["id"]
-    assert retomada["thread_id_foundry"] == "thread-abc"
+    assert retomada["thread_id_foundry"] is None
+
+
+def test_thread_id_do_foundry_e_aceito_do_admin(
+    sessao: Session, client: TestClient
+) -> None:
+    """ADMIN vincula a thread do Foundry à sessão do aluno."""
+    admin, usuario_aluno, _ = _montar_usuarios(sessao)
+    _autenticar(client, usuario_aluno)
+    client.post("/api/conversas")
+    conversa = ConversaRepository(sessao).buscar_aberta_por_aluno(
+        usuario_aluno.aluno_id
+    )
+
+    _autenticar(client, admin)
+    repo = ConversaRepository(sessao)
+    atualizada = repo.abrir_ou_continuar(
+        usuario_aluno.aluno_id, "thread-admin"
+    )
+
+    assert atualizada.id == conversa.id
+    assert atualizada.thread_id_foundry == "thread-admin"
 
 
 def test_admin_nao_abre_sessao_de_aluno(sessao: Session, client: TestClient) -> None:
@@ -297,6 +319,27 @@ def test_job_preserva_sessao_com_interacao_recente(
 
     assert fechar_conversas_inativas(sessao) == []
     assert conversa.status is StatusConversa.ABERTA
+
+
+def test_timeout_nao_sobrescreve_logout_concorrente(
+    sessao: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O UPDATE do job é atômico: sessão já FECHADA mantém o motivo."""
+    monkeypatch.setenv("THREAD_TIMEOUT_MIN", "10")
+    aluno = AlunoRepository(sessao).criar(
+        cpf="99988877766", nome_completo="Aluno Race", email="race@exemplo.com"
+    )
+    repo = ConversaRepository(sessao)
+    conversa = repo.abrir(aluno.id)
+    repo.fechar(conversa.id, MotivoFechamento.LOGOUT)
+
+    fechadas = repo.fechar_inativas(
+        datetime.now(timezone.utc) - timedelta(minutes=30)
+    )
+
+    assert fechadas == []
+    sessao.refresh(conversa)
+    assert conversa.motivo_fechamento is MotivoFechamento.LOGOUT
 
 
 def test_registrar_interacao_adia_o_timeout(

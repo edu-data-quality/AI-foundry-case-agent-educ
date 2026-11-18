@@ -98,10 +98,17 @@ def logout(
         return LogoutResposta()
 
     repo = ConversaRepository(sessao)
-    conversa = repo.buscar_aberta_por_aluno(aluno_id)
+    # A sessão pode já estar FECHADA (logout anterior ou job de timeout).
+    # `buscar_por_id` pega qualquer estado; o UPDATE atômico abaixo só
+    # fecha o que ainda está ABERTA.
+    conversa = repo.buscar_por_id_por_aluno(aluno_id)
     if conversa is None:
         return LogoutResposta()
-    fechada = repo.fechar(conversa.id, MotivoFechamento.LOGOUT)
+    fechada = repo.fechar_por_id_se_aberta(conversa.id, MotivoFechamento.LOGOUT)
+    if fechada is None:
+        # Corrida com o job de timeout: a sessão já foi fechada. Logout segue
+        # idempotente e devolve o id da sessão encerrada.
+        return LogoutResposta(conversa_id=str(conversa.id))
     return LogoutResposta(conversa_id=str(fechada.id))
 
 

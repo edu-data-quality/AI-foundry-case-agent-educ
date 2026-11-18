@@ -40,8 +40,9 @@ router = APIRouter(prefix="/api/conversas", tags=["conversas"])
 class AbrirConversaRequest(BaseModel):
     """Corpo opcional do `POST /api/conversas`.
 
-    `thread_id_foundry` é preenchido pela integração com o Foundry (S12);
-    quando omitido, a sessão nasce sem thread.
+    `thread_id_foundry` é preenchido pela integração com o Foundry (S12).
+    Só o ADMIN pode defini-lo: o aluno não escolhe a própria thread do
+    Foundry (evita hijack de thread); o valor enviado pelo aluno é ignorado.
     """
 
     thread_id_foundry: str | None = None
@@ -89,9 +90,14 @@ def abrir_conversa(
 ) -> ConversaResposta:
     """Abre a sessão do aluno logado ou retoma a que já está ABERTA."""
     aluno_id = exigir_aluno(usuario)
-    conversa = ConversaRepository(sessao).abrir_ou_continuar(
-        aluno_id, payload.thread_id_foundry if payload else None
+    # `thread_id_foundry` só é aceito de ADMIN. O aluno não vincula thread:
+    # a integração com o Foundry (S12) faz isso no fluxo autenticado.
+    thread_id = (
+        payload.thread_id_foundry
+        if payload and usuario.role is RoleUsuario.ADMIN
+        else None
     )
+    conversa = ConversaRepository(sessao).abrir_ou_continuar(aluno_id, thread_id)
     return _serializar(conversa)
 
 

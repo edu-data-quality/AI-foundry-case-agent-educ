@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -85,21 +85,38 @@ class ConversaRepository:
         return conversa
 
     def fechar_inativas(self, limite: datetime) -> list[Conversa]:
-        """Fecha por TIMEOUT as sessões ABERTAS sem interação desde `limite`."""
-        conversas = list(
+        """Fecha por TIMEOUT as sessões ABERTAS sem interação desde `limite`.
+
+        O UPDATE é atômico (`WHERE status = 'ABERTA'`): um logout concorrente
+        que fechou a sessão primeiro impede o job de sobrescrever o motivo
+        `LOGOUT` por `TIMEOUT`. O `rowcount` diz quantas linhas foram
+        realmente fechadas por esta chamada.
+        """
+        agora = datetime.now(timezone.utc)
+        resultado = self._sessao.execute(
+            update(Conversa)
+            .where(
+                Conversa.status == StatusConversa.ABERTA,
+                Conversa.ultima_interacao < limite,
+            )
+            .values(
+                status=StatusConversa.FECHADA,
+                motivo_fechamento=MotivoFechamento.TIMEOUT,
+                data_fim=agora,
+            )
+        )
+        self._sessao.commit()
+        if resultado.rowcount == 0:
+            return []
+        return list(
             self._sessao.scalars(
                 select(Conversa).where(
-                    Conversa.status == StatusConversa.ABERTA,
-                    Conversa.ultima_interacao < limite,
+                    Conversa.status == StatusConversa.FECHADA,
+                    Conversa.motivo_fechamento == MotivoFechamento.TIMEOUT,
+                    Conversa.data_fim == agora,
                 )
             )
         )
-        agora = datetime.now(timezone.utc)
-        for conversa in conversas:
-            self._marcar_fechada(conversa, MotivoFechamento.TIMEOUT, agora)
-        if conversas:
-            self._sessao.commit()
-        return conversas
 
     def listar(
         self,
@@ -115,7 +132,10 @@ class ConversaRepository:
         return list(self._sessao.scalars(consulta))
 
     def fechar(self, conversa_id: uuid.UUID, motivo: MotivoFechamento) -> Conversa:
-        """Fecha a conversa registrando motivo e data de fim."""
+        """Fecha a conversa registrando motivo e data de fim.
+
+        Lança `ValueError` se a conversa não existe ou já está fechada.
+        """
         conversa = self.buscar_por_id(conversa_id)
         if conversa is None:
             raise ValueError(f"conversa {conversa_id} não encontrada")
@@ -124,6 +144,33 @@ class ConversaRepository:
         self._marcar_fechada(conversa, motivo, datetime.now(timezone.utc))
         self._sessao.commit()
         return conversa
+
+    def fechar_por_id_se_aberta(
+        self, conversa_id: uuid.UUID, motivo: MotivoFechamento
+    ) -> Conversa | None:
+        """Fecha a conversa só se ainda estiver ABERTA; senão devolve `None`.
+
+        Update atômico (`WHERE status = 'ABERTA'`): quem fechar primeiro vence.
+        O logout usa isso para não falhar quando o job de timeout fechou a
+        sessão na mesma hora.
+        """
+        agora = datetime.now(timezone.utc)
+        resultado = self._sessao.execute(
+            update(Conversa)
+            .where(
+                Conversa.id == conversa_id,
+                Conversa.status == StatusConversa.ABERTA,
+            )
+            .values(
+                status=StatusConversa.FECHADA,
+                motivo_fechamento=motivo,
+                data_fim=agora,
+            )
+        )
+        self._sessao.commit()
+        if resultado.rowcount == 0:
+            return None
+        return self.buscar_por_id(conversa_id)
 
     @staticmethod
     def _marcar_fechada(
@@ -137,6 +184,14 @@ class ConversaRepository:
     def buscar_por_id(self, conversa_id: uuid.UUID) -> Conversa | None:
         """Busca pelo id interno."""
         return self._sessao.get(Conversa, conversa_id)
+
+    def buscar_por_id_por_aluno(self, aluno_id: uuid.UUID) -> Conversa | None:
+        """Retorna a sessão mais recente do aluno, qualquer que seja o estado."""
+        return self._sessao.scalars(
+            select(Conversa)
+            .where(Conversa.aluno_id == aluno_id)
+            .order_by(Conversa.data_inicio.desc())
+        ).first()
 
     def buscar_aberta_por_aluno(self, aluno_id: uuid.UUID) -> Conversa | None:
         """Retorna a conversa ABERTA do aluno, se existir.

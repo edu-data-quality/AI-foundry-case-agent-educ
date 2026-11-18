@@ -238,17 +238,40 @@ def test_logout_fecha_a_sessao_aberta(sessao: Session, client: TestClient) -> No
 def test_logout_sem_sessao_aberta_e_idempotente(
     sessao: Session, client: TestClient
 ) -> None:
+    """Logout repetido não erra e devolve sempre o id da sessão encerrada."""
     _montar_aluno_admin(sessao)
     login = client.post(
         "/api/auth/login", json={"login": "aluna", "senha": "aluna123"}
     ).json()
     client.headers.update({"Authorization": f"Bearer {login['access_token']}"})
-    client.post("/api/auth/logout")
+    primeira = client.post("/api/auth/logout").json()
 
     response = client.post("/api/auth/logout")
 
     assert response.status_code == 200
-    assert response.json()["conversa_id"] is None
+    assert response.json()["conversa_id"] == primeira["conversa_id"]
+    assert primeira["conversa_id"] == login["conversa_id"]
+
+
+def test_logout_nao_quebra_com_sessao_ja_fechada(
+    sessao: Session, client: TestClient
+) -> None:
+    """Corrida com o job de timeout: logout devolve o id, sem 409/500."""
+    _montar_aluno_admin(sessao)
+    login = client.post(
+        "/api/auth/login", json={"login": "aluna", "senha": "aluna123"}
+    ).json()
+    client.headers.update({"Authorization": f"Bearer {login['access_token']}"})
+    conversa = ConversaRepository(sessao).buscar_por_id(
+        uuid.UUID(login["conversa_id"])
+    )
+    # Fecha por TIMEOUT antes do logout (o job ganhou a corrida).
+    ConversaRepository(sessao).fechar(conversa.id, MotivoFechamento.TIMEOUT)
+
+    response = client.post("/api/auth/logout")
+
+    assert response.status_code == 200
+    assert response.json()["conversa_id"] == login["conversa_id"]
 
 
 def test_logout_sem_token_retorna_401(sessao: Session, client: TestClient) -> None:
