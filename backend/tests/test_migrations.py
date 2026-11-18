@@ -31,6 +31,14 @@ def _aplicar_migracoes(url: str) -> None:
     command.upgrade(config, "head")
 
 
+def _aplicar_migracao_ate(url: str, revisao: str) -> None:
+    """`alembic upgrade <revisao>` — usado para simular banco legado."""
+    config = Config(str(BACKEND / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND / "alembic"))
+    config.set_main_option("sqlalchemy.url", url)
+    command.upgrade(config, revisao)
+
+
 def test_migracao_cria_todas_as_tabelas(tmp_path: Path) -> None:
     url = f"sqlite:///{tmp_path / 'migrado.db'}"
 
@@ -106,3 +114,52 @@ def test_migracao_e_idempotente(tmp_path: Path) -> None:
 
     inspetor = inspect(create_engine(url))
     assert TABELAS_ESPERADAS <= set(inspetor.get_table_names())
+
+
+def test_migracao_fecha_abertas_duplicadas_de_base_legada(tmp_path: Path) -> None:
+    """Banco antigo com 2+ ABERTA por aluno não pode quebrar o índice único."""
+    url = f"sqlite:///{tmp_path / 'legado.db'}"
+    _aplicar_migracao_ate(url, "0001_schema_inicial")
+    engine = create_engine(url)
+    aluno_id = "0f0e0d0c-0b0a-4908-8706-050403020100"
+    antiga_id = "1f1e1d1c-1b1a-4918-8716-151413121100"
+    recente_id = "2f2e2d2c-2b2a-4928-8726-252423222100"
+
+    with engine.begin() as conexao:
+        conexao.execute(
+            text(
+                "INSERT INTO alunos (id, cpf, nome_completo, email) "
+                "VALUES (:id, '12345678901', 'Aluno Legado', 'legado@exemplo.com')"
+            ),
+            {"id": aluno_id},
+        )
+        for conversa_id, data_inicio in (
+            (antiga_id, "2026-11-01 10:00:00"),
+            (recente_id, "2026-11-02 10:00:00"),
+        ):
+            conexao.execute(
+                text(
+                    "INSERT INTO conversas (id, aluno_id, status, data_inicio) "
+                    "VALUES (:id, :aluno_id, 'ABERTA', :data_inicio)"
+                ),
+                {"id": conversa_id, "aluno_id": aluno_id, "data_inicio": data_inicio},
+            )
+
+    _aplicar_migracoes(url)
+
+    with engine.connect() as conexao:
+        abertas = (
+            conexao.execute(
+                text("SELECT id FROM conversas WHERE status = 'ABERTA'")
+            )
+            .scalars()
+            .all()
+        )
+        fechadas = conexao.execute(
+            text(
+                "SELECT motivo_fechamento FROM conversas WHERE status = 'FECHADA'"
+            )
+        ).scalars().all()
+
+    assert abertas == [recente_id]
+    assert fechadas == ["TIMEOUT"]

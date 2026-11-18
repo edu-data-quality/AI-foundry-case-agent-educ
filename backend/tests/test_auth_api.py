@@ -9,6 +9,7 @@ Cobre os critérios de aceitação:
 """
 
 from datetime import timedelta
+import uuid
 
 import pytest
 from fastapi import APIRouter, Depends, FastAPI
@@ -18,9 +19,10 @@ from sqlalchemy.orm import Session
 from app import auth
 from app.api.deps import requer_admin
 from app.api.routes.auth import router as auth_router
-from app.db.models import RoleUsuario, Usuario
+from app.db.models import MotivoFechamento, RoleUsuario, StatusConversa, Usuario
 from app.db.session import get_db
 from app.repositories.alunos import AlunoRepository
+from app.repositories.conversas import ConversaRepository
 from app.repositories.usuarios import UsuarioRepository
 from app.security import hash_senha
 
@@ -176,9 +178,103 @@ def test_admin_acessa_rota_admin(sessao: Session, client: TestClient) -> None:
 
 
 def test_rotas_reais_incluidas_no_app_principal() -> None:
-    """O app real expõe /api/auth/login e /api/auth/me."""
+    """O app real expõe /api/auth/login, /api/auth/logout e /api/auth/me."""
     from app.main import app
 
     schema = app.openapi()["paths"]
     assert "/api/auth/login" in schema
+    assert "/api/auth/logout" in schema
     assert "/api/auth/me" in schema
+
+
+def test_login_do_aluno_abre_sessao_de_chat(
+    sessao: Session, client: TestClient
+) -> None:
+    _, aluno = _montar_aluno_admin(sessao)
+
+    response = client.post(
+        "/api/auth/login", json={"login": "aluna", "senha": "aluna123"}
+    )
+
+    assert response.status_code == 200
+    conversa_id = response.json()["conversa_id"]
+    assert conversa_id is not None
+    conversa = ConversaRepository(sessao).buscar_por_id(uuid.UUID(conversa_id))
+    assert conversa is not None
+    assert conversa.aluno_id == aluno.aluno_id
+    assert conversa.status is StatusConversa.ABERTA
+
+
+def test_login_do_admin_nao_abre_sessao(sessao: Session, client: TestClient) -> None:
+    _montar_aluno_admin(sessao)
+
+    response = client.post(
+        "/api/auth/login", json={"login": "admin", "senha": "admin123"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["conversa_id"] is None
+
+
+def test_logout_fecha_a_sessao_aberta(sessao: Session, client: TestClient) -> None:
+    _montar_aluno_admin(sessao)
+    login = client.post(
+        "/api/auth/login", json={"login": "aluna", "senha": "aluna123"}
+    ).json()
+    client.headers.update({"Authorization": f"Bearer {login['access_token']}"})
+
+    response = client.post("/api/auth/logout")
+
+    assert response.status_code == 200
+    assert response.json()["conversa_id"] == login["conversa_id"]
+    conversa = ConversaRepository(sessao).buscar_por_id(
+        uuid.UUID(login["conversa_id"])
+    )
+    assert conversa.status is StatusConversa.FECHADA
+    assert conversa.motivo_fechamento is MotivoFechamento.LOGOUT
+    assert conversa.data_fim is not None
+
+
+def test_logout_sem_sessao_aberta_e_idempotente(
+    sessao: Session, client: TestClient
+) -> None:
+    """Logout repetido não erra e devolve sempre o id da sessão encerrada."""
+    _montar_aluno_admin(sessao)
+    login = client.post(
+        "/api/auth/login", json={"login": "aluna", "senha": "aluna123"}
+    ).json()
+    client.headers.update({"Authorization": f"Bearer {login['access_token']}"})
+    primeira = client.post("/api/auth/logout").json()
+
+    response = client.post("/api/auth/logout")
+
+    assert response.status_code == 200
+    assert response.json()["conversa_id"] == primeira["conversa_id"]
+    assert primeira["conversa_id"] == login["conversa_id"]
+
+
+def test_logout_nao_quebra_com_sessao_ja_fechada(
+    sessao: Session, client: TestClient
+) -> None:
+    """Corrida com o job de timeout: logout devolve o id, sem 409/500."""
+    _montar_aluno_admin(sessao)
+    login = client.post(
+        "/api/auth/login", json={"login": "aluna", "senha": "aluna123"}
+    ).json()
+    client.headers.update({"Authorization": f"Bearer {login['access_token']}"})
+    conversa = ConversaRepository(sessao).buscar_por_id(
+        uuid.UUID(login["conversa_id"])
+    )
+    # Fecha por TIMEOUT antes do logout (o job ganhou a corrida).
+    ConversaRepository(sessao).fechar(conversa.id, MotivoFechamento.TIMEOUT)
+
+    response = client.post("/api/auth/logout")
+
+    assert response.status_code == 200
+    assert response.json()["conversa_id"] == login["conversa_id"]
+
+
+def test_logout_sem_token_retorna_401(sessao: Session, client: TestClient) -> None:
+    _montar_aluno_admin(sessao)
+
+    assert client.post("/api/auth/logout").status_code == 401

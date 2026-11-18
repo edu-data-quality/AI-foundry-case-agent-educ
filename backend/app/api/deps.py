@@ -65,3 +65,39 @@ def requer_admin(
             detail="acesso restrito ao administrador",
         )
     return usuario
+
+
+def aluno_id_do_usuario(usuario: Usuario) -> uuid.UUID | None:
+    """`aluno_id` quando o usuário é ALUNO com vínculo; `None` caso contrário.
+
+    ADMIN e ALUNO sem vínculo não têm sessão de chat própria.
+    """
+    if usuario.role is not RoleUsuario.ALUNO:
+        return None
+    return usuario.aluno_id
+
+
+def exigir_aluno(usuario: Usuario) -> uuid.UUID:
+    """Retorna o `aluno_id` do usuário ALUNO; 403 para ADMIN ou sem vínculo.
+
+    Usado por rotas que só fazem sentido para o aluno (abrir/fechar/listar a
+    própria sessão de chat).
+    """
+    aluno_id = aluno_id_do_usuario(usuario)
+    if aluno_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="apenas o aluno autenticado acessa este recurso",
+        )
+    return aluno_id
+
+
+def garantir_acesso_aluno(usuario: Usuario, aluno_id: uuid.UUID) -> None:
+    """ADMIN acessa qualquer aluno; ALUNO só o próprio (403 caso contrário)."""
+    if usuario.role is RoleUsuario.ADMIN:
+        return
+    if aluno_id_do_usuario(usuario) != aluno_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="acesso restrito aos próprios dados",
+        )
