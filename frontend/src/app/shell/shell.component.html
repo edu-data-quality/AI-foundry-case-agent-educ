@@ -1,0 +1,20 @@
+<header class="topo">
+  <span class="marca">Assistente Académico EAD</span>
+  <nav>
+    @if (auth.role === 'ALUNO') {
+      <a routerLink="/aluno" routerLinkActive="ativo" aria-current="page">
+        Chat
+      </a>
+    }
+    @if (auth.role === 'ADMIN') {
+      <a routerLink="/admin" routerLinkActive="ativo" aria-current="page">
+        Painel
+      </a>
+    }
+  </nav>
+  <button type="button" class="sair" (click)="sair()">Sair</button>
+</header>
+
+<main class="conteudo">
+  <router-outlet />
+</main>

@@ -1,0 +1,31 @@
+<section class="login">
+  <h1>Assistente Académico EAD</h1>
+  <form [formGroup]="formulario" (ngSubmit)="entrar()" novalidate>
+    <label for="login">Login</label>
+    <input
+      id="login"
+      name="login"
+      type="text"
+      formControlName="login"
+      autocomplete="username"
+      autofocus
+    />
+
+    <label for="senha">Senha</label>
+    <input
+      id="senha"
+      name="senha"
+      type="password"
+      formControlName="senha"
+      autocomplete="current-password"
+    />
+
+    @if (erro) {
+      <p class="erro" role="alert">{{ erro }}</p>
+    }
+
+    <button type="submit" [disabled]="formulario.invalid || enviando">
+      Entrar
+    </button>
+  </form>
+</section>

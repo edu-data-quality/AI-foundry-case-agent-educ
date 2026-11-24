@@ -1,0 +1,145 @@
+<section class="dashboard-aluno">
+  <header class="cabecalho">
+    <h1>Meu dashboard acadêmico</h1>
+    @if (status?.aluno; as aluno) {
+      <p class="identificacao">
+        <strong>{{ aluno.nome_completo }}</strong> · {{ aluno.curso }}
+        @if (aluno.polo) {
+          · Polo {{ aluno.polo }}
+        }
+      </p>
+      <p class="matricula">Matrícula {{ aluno.status_matricula }}</p>
+    }
+  </header>
+
+  @if (erroCarregamento) {
+    <p class="erro" data-testid="erro">
+      Não foi possível carregar seus dados acadêmicos. Tente novamente mais tarde.
+    </p>
+  } @else if (!status) {
+    <p class="carregando">Carregando seus dados…</p>
+  } @else {
+    <section class="secao notas" aria-labelledby="titulo-notas">
+      <h2 id="titulo-notas">Notas por disciplina</h2>
+      @if (disciplinas.length === 0) {
+        <p class="vazio">Nenhuma disciplina matriculada.</p>
+      } @else {
+        <table class="tabela-notas">
+          <thead>
+            <tr>
+              <th scope="col">Código</th>
+              <th scope="col">Disciplina</th>
+              <th scope="col">Semestre</th>
+              <th scope="col">AV1</th>
+              <th scope="col">AV2</th>
+              <th scope="col">Nota final</th>
+              <th scope="col">Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (disciplina of disciplinas; track disciplina.disciplina_id) {
+              <tr>
+                <td>{{ disciplina.codigo }}</td>
+                <td>{{ disciplina.nome }}</td>
+                <td>{{ disciplina.semestre_letivo }}</td>
+                <td>{{ disciplina.nota_av1 ?? '—' }}</td>
+                <td>{{ disciplina.nota_av2 ?? '—' }}</td>
+                <td>{{ disciplina.nota_final ?? '—' }}</td>
+                <td>
+                  <span class="situacao" [class]="disciplina.status_disciplina">
+                    {{ rotuloStatusDisciplina(disciplina.status_disciplina) }}
+                  </span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+
+    <section class="secao financeiro" aria-labelledby="titulo-boletos">
+      <h2 id="titulo-boletos">Boletos em aberto</h2>
+      @if (boletos.length === 0) {
+        <p class="vazio">Nenhum boleto em aberto. Tudo em dia! 🎉</p>
+      } @else {
+        <ul class="lista-boletos">
+          @for (boleto of boletos; track $index) {
+            <li class="boleto">
+              <header class="boleto-cabecalho">
+                <h3>Boleto — vencimento {{ formatarData(boleto.data_vencimento) }}</h3>
+                <span class="situacao" [class]="boleto.status_pagamento">
+                  {{ rotuloStatusPagamento(boleto.status_pagamento) }}
+                </span>
+              </header>
+
+              @if (boleto.linha_digitavel) {
+                <p class="campo">
+                  <span class="rotulo">Linha digitável</span>
+                  <code data-testid="linha-digitavel">{{ boleto.linha_digitavel }}</code>
+                </p>
+              }
+
+              @if (boleto.qr_code_pix) {
+                <div class="campo pix">
+                  <span class="rotulo">Pix (copia e cola)</span>
+                  <code data-testid="qr-pix">{{ boleto.qr_code_pix }}</code>
+                </div>
+              }
+
+              <div class="acoes">
+                <button
+                  type="button"
+                  class="acao-primaria"
+                  data-testid="baixar-boleto"
+                  (click)="baixarBoleto(boleto)"
+                >
+                  Baixar boleto
+                </button>
+                <button
+                  type="button"
+                  class="acao-secundaria"
+                  data-testid="pedir-declaracao"
+                  (click)="pedirDeclaracao()"
+                >
+                  Pedir declaração
+                </button>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+
+      @if (avisoDeclaracao) {
+        <p class="aviso" data-testid="aviso-declaracao">
+          A emissão da declaração de matrícula estará disponível em breve pelo chat.
+        </p>
+      }
+    </section>
+  }
+
+  @if (boletoParaImprimir; as boleto) {
+    <section class="boleto-impressao" data-testid="detalhe-boleto">
+      <h2>Boleto — vencimento {{ formatarData(boleto.data_vencimento) }}</h2>
+      <p>
+        Situação:
+        <span class="situacao" [class]="boleto.status_pagamento">
+          {{ rotuloStatusPagamento(boleto.status_pagamento) }}
+        </span>
+      </p>
+
+      @if (boleto.linha_digitavel) {
+        <p class="campo">
+          <span class="rotulo">Linha digitável</span>
+          <code>{{ boleto.linha_digitavel }}</code>
+        </p>
+      }
+
+      @if (boleto.qr_code_pix) {
+        <p class="campo">
+          <span class="rotulo">Pix (copia e cola)</span>
+          <code>{{ boleto.qr_code_pix }}</code>
+        </p>
+      }
+    </section>
+  }
+</section>

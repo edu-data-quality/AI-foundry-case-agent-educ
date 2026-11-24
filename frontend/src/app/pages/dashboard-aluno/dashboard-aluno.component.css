@@ -1,0 +1,198 @@
+:host {
+  display: block;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #1f2430;
+  padding: 1.5rem 2rem;
+}
+
+.cabecalho h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+}
+
+.identificacao {
+  margin: 0;
+  color: #444b5a;
+}
+
+.matricula {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.secao {
+  margin-top: 2rem;
+}
+
+.secao h2 {
+  font-size: 1.1rem;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.5rem;
+}
+
+.tabela-notas {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.tabela-notas th,
+.tabela-notas td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tabela-notas th {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+
+.situacao {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.situacao.EM_ANDAMENTO,
+.situacao.PENDENTE {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.situacao.APROVADO,
+.situacao.PAGO {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.situacao.REPROVADO {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.situacao.AGUARDANDO_NOTA {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.situacao.ATRASADO {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.lista-boletos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.boleto {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.boleto-cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.boleto-cabecalho h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+}
+
+.campo .rotulo {
+  font-size: 0.78rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.campo code {
+  background: #f3f4f6;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.acoes {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.acao-primaria,
+.acao-secundaria {
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.acao-primaria {
+  background: #2563eb;
+  color: #fff;
+}
+
+.acao-secundaria {
+  background: #f3f4f6;
+  color: #1f2430;
+}
+
+.acao-primaria:hover {
+  background: #1d4ed8;
+}
+
+.acao-secundaria:hover {
+  background: #e5e7eb;
+}
+
+.aviso {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #e0e7ff;
+  border-radius: 6px;
+  color: #3730a3;
+}
+
+.erro {
+  padding: 1rem;
+  background: #fee2e2;
+  border-radius: 6px;
+  color: #991b1b;
+}
+
+.carregando,
+.vazio {
+  color: #6b7280;
+}
+
+/* Área de impressão: só o boleto selecionado sai no papel. */
+@media print {
+  .dashboard-aluno > *:not(.boleto-impressao) {
+    display: none;
+  }
+}
+
+.boleto-impressao {
+  display: none;
+}
