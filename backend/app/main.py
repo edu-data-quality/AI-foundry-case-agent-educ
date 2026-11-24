@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.routes.admin import router as admin_router
@@ -14,6 +15,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.conversas import router as conversas_router
 from app.api.routes.declaracoes import router as declaracoes_router
 from app.api.routes.financeiro import router as financeiro_router
+from app.config import lista_env
 from app.conversas import job_ativo, loop_timeout_conversas
 
 
@@ -37,6 +39,19 @@ app = FastAPI(
     description="Backend do Assistente Académico EAD (Azure AI Foundry case).",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+# O front Angular roda em outra origem (localhost:4200). Sem CORS o preflight
+# `OPTIONS` recebe 405 e o navegador bloqueia login e demais chamadas.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=lista_env(
+        "CORS_ORIGINS",
+        ["http://localhost:4200", "http://127.0.0.1:4200"],
+    ),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(health_router)
