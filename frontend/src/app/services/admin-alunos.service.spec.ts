@@ -3,7 +3,11 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 
 import { environment } from '../../environments/environment';
-import { AlunoDetalhe, AlunoResumo } from '../models/admin-aluno';
+import {
+  AlunoDetalhe,
+  AlunoResumo,
+  CadastroAlunoPayload,
+} from '../models/admin-aluno';
 import { AdminAlunosService } from './admin-alunos.service';
 
 const URL_BASE = `${environment.apiUrl}/api/admin/alunos`;
@@ -95,5 +99,25 @@ describe('AdminAlunosService', () => {
     req.flush(DETALHE);
 
     expect(recebido!).toEqual(DETALHE);
+  });
+
+  it('cadastra aluno via POST /api/admin/alunos', () => {
+    const payload: CadastroAlunoPayload = {
+      nome_completo: 'Novo Aluno',
+      cpf: '52998224725',
+      email: 'novo@exemplo.com',
+      telefone: null,
+      curso: 'ADS',
+      polo: 'Recife',
+      status_matricula: 'ATIVO',
+    };
+    let recebido: AlunoResumo | null = null;
+    service.criar(payload).subscribe((aluno) => (recebido = aluno));
+
+    const req = http.expectOne((r) => r.url === URL_BASE && r.method === 'POST');
+    expect(req.request.body).toEqual(payload);
+    req.flush({ ...ALUNO, ...payload });
+
+    expect(recebido!).toEqual({ ...ALUNO, ...payload });
   });
 });

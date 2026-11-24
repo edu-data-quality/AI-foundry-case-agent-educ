@@ -81,6 +81,31 @@ describe('AdminAlunosComponent', () => {
     return fixture;
   }
 
+  /** Abre o formulário e preenche dados válidos para o POST. */
+  function preencherFormularioValido(componente: AdminAlunosComponent) {
+    componente.abrirFormulario();
+    componente.formulario.setValue({
+      nome_completo: 'Novo Aluno Fictício',
+      cpf: '529.982.247-25',
+      email: 'novo@exemplo.com',
+      telefone: '(11) 99999-0000',
+      curso: 'ADS',
+      polo: 'Recife',
+      status_matricula: 'TRANCADO',
+    });
+  }
+
+  const NOVO_ALUNO: AlunoResumo = {
+    id: 'uuid-aluno-novo',
+    cpf: '52998224725',
+    nome_completo: 'Novo Aluno Fictício',
+    email: 'novo@exemplo.com',
+    telefone: '(11) 99999-0000',
+    curso: 'ADS',
+    polo: 'Recife',
+    status_matricula: 'TRANCADO',
+  };
+
   it('carrega e exibe a listagem de alunos no init', () => {
     const fixture = criarComponente();
     const texto = fixture.nativeElement.textContent as string;
@@ -119,7 +144,7 @@ describe('AdminAlunosComponent', () => {
     const fixture = criarComponente();
 
     const botoes = fixture.nativeElement.querySelectorAll(
-      'button.acao',
+      'table.tabela-alunos button.acao',
     ) as NodeListOf<HTMLButtonElement>;
     botoes[0].click();
 
@@ -143,7 +168,7 @@ describe('AdminAlunosComponent', () => {
     const fixture = criarComponente();
 
     const botaoDetalhes = fixture.nativeElement.querySelector(
-      'button.acao',
+      'table.tabela-alunos button.acao',
     ) as HTMLButtonElement;
     botaoDetalhes.click();
     http.expectOne(`${URL_BASE}/${ALUNOS[0].id}`).flush(DETALHE);
@@ -176,5 +201,123 @@ describe('AdminAlunosComponent', () => {
     expect(fixture.nativeElement.textContent).toContain(
       'Não foi possível carregar os alunos',
     );
+  });
+
+  it('abre o formulário de cadastro com os campos do PRD', () => {
+    const fixture = criarComponente();
+
+    const botaoNovo = fixture.nativeElement.querySelector(
+      'button.novo-aluno',
+    ) as HTMLButtonElement;
+    botaoNovo.click();
+    fixture.detectChanges();
+
+    const texto = fixture.nativeElement.textContent as string;
+    expect(texto).toContain('Novo aluno');
+    expect(
+      fixture.nativeElement.querySelector('form input#nome_completo'),
+    ).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('form input#cpf')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('form input#email')).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('form input#telefone'),
+    ).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('form input#curso')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('form input#polo')).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('form select#status_matricula'),
+    ).not.toBeNull();
+  });
+
+  it('envia o cadastro válido e exibe atalho para o aluno criado', () => {
+    const fixture = criarComponente();
+    const componente = fixture.componentInstance;
+    preencherFormularioValido(componente);
+
+    componente.cadastrar();
+
+    const req = http.expectOne((r) => r.url === URL_BASE && r.method === 'POST');
+    expect(req.request.body).toEqual({
+      nome_completo: 'Novo Aluno Fictício',
+      cpf: '52998224725',
+      email: 'novo@exemplo.com',
+      telefone: '(11) 99999-0000',
+      curso: 'ADS',
+      polo: 'Recife',
+      status_matricula: 'TRANCADO',
+    });
+    req.flush(NOVO_ALUNO);
+    fixture.detectChanges();
+
+    // Cadastro recarrega a listagem sem filtro para o aluno aparecer.
+    const listagem = http.expectOne((r) => r.url === URL_BASE && r.method === 'GET');
+    expect(listagem.request.params.has('busca')).toBeFalse();
+    listagem.flush([...ALUNOS, NOVO_ALUNO]);
+    fixture.detectChanges();
+
+    const texto = fixture.nativeElement.textContent as string;
+    expect(texto).toContain('Novo Aluno Fictício cadastrado com sucesso.');
+    expect(texto).toContain('Ir para o aluno');
+    expect(fixture.nativeElement.querySelector('.form-cadastro')).toBeNull();
+    expect(
+      (fixture.nativeElement.querySelector('.sucesso button') as HTMLButtonElement)
+        .textContent,
+    ).toContain('Ir para o aluno');
+
+    const atalho = fixture.nativeElement.querySelector(
+      '.sucesso button',
+    ) as HTMLButtonElement;
+    atalho.click();
+    http.expectOne(`${URL_BASE}/${NOVO_ALUNO.id}`).flush({
+      aluno: NOVO_ALUNO,
+      disciplinas: [],
+      mensalidades: [],
+    });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Aluno sem disciplinas matriculadas.');
+  });
+
+  it('mostra mensagem amigável para CPF duplicado (409)', () => {
+    const fixture = criarComponente();
+    const componente = fixture.componentInstance;
+    preencherFormularioValido(componente);
+
+    componente.cadastrar();
+    http
+      .expectOne((r) => r.url === URL_BASE && r.method === 'POST')
+      .flush({ detail: 'CPF já cadastrado' }, { status: 409, statusText: 'Conflict' });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('CPF já cadastrado');
+  });
+
+  it('mostra mensagem de acesso negado quando a API responde 403', () => {
+    const fixture = criarComponente();
+    const componente = fixture.componentInstance;
+    preencherFormularioValido(componente);
+
+    componente.cadastrar();
+    http
+      .expectOne((r) => r.url === URL_BASE && r.method === 'POST')
+      .flush({ detail: 'proibido' }, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain(
+      'Apenas administradores podem cadastrar alunos',
+    );
+  });
+
+  it('bloqueia CPF inválido antes de chamar a API', () => {
+    const fixture = criarComponente();
+    const componente = fixture.componentInstance;
+    preencherFormularioValido(componente);
+    componente.formulario.controls.cpf.setValue('111.111.111-11');
+
+    componente.cadastrar();
+    fixture.detectChanges();
+
+    http.expectNone((r) => r.url === URL_BASE && r.method === 'POST');
+    expect(fixture.nativeElement.textContent).toContain('CPF inválido.');
   });
 });

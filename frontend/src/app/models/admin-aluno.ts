@@ -7,6 +7,17 @@ import { StatusMatricula } from './status-academico';
 
 export type StatusPagamento = 'PENDENTE' | 'PAGO' | 'ATRASADO';
 
+/** Payload de `POST /api/admin/alunos` (schema CadastroAluno). */
+export interface CadastroAlunoPayload {
+  cpf: string;
+  nome_completo: string;
+  email: string;
+  telefone?: string | null;
+  curso?: string | null;
+  polo?: string | null;
+  status_matricula: StatusMatricula;
+}
+
 /** Item de `GET /api/admin/alunos` (schema AlunoResposta). */
 export interface AlunoResumo {
   id: string;

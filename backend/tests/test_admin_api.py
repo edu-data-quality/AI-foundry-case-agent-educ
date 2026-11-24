@@ -126,6 +126,31 @@ def test_admin_cria_aluno(sessao: Session, client: TestClient) -> None:
     assert status.json()["aluno"]["nome_completo"] == "Novo Aluno Fictício"
 
 
+def test_admin_cria_aluno_com_status_matricula_escolhido(
+    sessao: Session, client: TestClient
+) -> None:
+    """O formulário do painel (#17) envia o status de matrícula no cadastro."""
+    _montar_ambiente(sessao)
+    _fazer_login(client, "admin", "admin123")
+
+    response = client.post(
+        "/api/admin/alunos",
+        json={
+            "cpf": CPF_NOVO,
+            "nome_completo": "Aluno Trancado",
+            "email": "trancado@exemplo.com",
+            "status_matricula": "TRANCADO",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["status_matricula"] == "TRANCADO"
+
+    status = client.get("/api/aluno/status", params={"cpf": CPF_NOVO})
+    assert status.status_code == 200
+    assert status.json()["aluno"]["status_matricula"] == "TRANCADO"
+
+
 def test_admin_criar_aluno_cpf_duplicado_retorna_409(
     sessao: Session, client: TestClient
 ) -> None:
