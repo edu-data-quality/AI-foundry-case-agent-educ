@@ -1,0 +1,151 @@
+<section class="pagina">
+  <header class="cabecalho">
+    <div>
+      <h1>Alunos</h1>
+      <p class="subtitulo">Consulte e busque alunos por nome ou CPF.</p>
+    </div>
+  </header>
+
+  <form class="busca" (ngSubmit)="pesquisar()" role="search">
+    <label class="campo" for="busca-alunos">Buscar aluno</label>
+    <input
+      id="busca-alunos"
+      name="busca"
+      type="search"
+      placeholder="Nome ou CPF"
+      autocomplete="off"
+      [(ngModel)]="busca"
+    />
+    <button type="submit" [disabled]="carregando">Buscar</button>
+  </form>
+
+  @if (erroListagem) {
+    <p class="erro" role="alert">
+      Não foi possível carregar os alunos. Tente novamente.
+    </p>
+  }
+
+  @if (carregando) {
+    <p class="aviso">Carregando alunos…</p>
+  } @else if (alunos.length === 0 && !erroListagem) {
+    <p class="aviso">Nenhum aluno encontrado.</p>
+  } @else if (alunos.length > 0) {
+    <table class="tabela-alunos">
+      <caption class="oculto">Lista de alunos</caption>
+      <thead>
+        <tr>
+          <th scope="col">Nome</th>
+          <th scope="col">CPF</th>
+          <th scope="col">Curso</th>
+          <th scope="col">Polo</th>
+          <th scope="col">Matrícula</th>
+          <th scope="col"><span class="oculto">Ações</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (aluno of alunos; track rastrearAluno($index, aluno)) {
+          <tr>
+            <td>{{ aluno.nome_completo }}</td>
+            <td>{{ aluno.cpf }}</td>
+            <td>{{ aluno.curso ?? '—' }}</td>
+            <td>{{ aluno.polo ?? '—' }}</td>
+            <td>{{ rotuloStatusMatricula(aluno.status_matricula) }}</td>
+            <td>
+              <button
+                type="button"
+                class="acao"
+                (click)="abrirDetalhe(aluno)"
+                [attr.aria-label]="'Ver detalhes de ' + aluno.nome_completo"
+              >
+                Detalhes
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  @if (carregandoDetalhe) {
+    <p class="aviso">Carregando detalhes do aluno…</p>
+  }
+
+  @if (erroDetalhe) {
+    <p class="erro" role="alert">Não foi possível carregar o detalhe do aluno.</p>
+  }
+
+  @if (detalhe) {
+    <section class="detalhe" aria-live="polite">
+      <header class="detalhe-topo">
+        <div>
+          <h2>{{ detalhe.aluno.nome_completo }}</h2>
+          <p class="subtitulo">
+            CPF {{ detalhe.aluno.cpf }} · {{ detalhe.aluno.curso ?? 'Curso não informado' }} ·
+            {{ detalhe.aluno.polo ?? 'Polo não informado' }}
+          </p>
+          <p class="subtitulo">
+            {{ detalhe.aluno.email }} · Matrícula:
+            {{ rotuloStatusMatricula(detalhe.aluno.status_matricula) }}
+          </p>
+        </div>
+        <button type="button" class="acao" (click)="fecharDetalhe()">Fechar</button>
+      </header>
+
+      <h3>Disciplinas</h3>
+      @if (detalhe.disciplinas.length === 0) {
+        <p class="aviso">Aluno sem disciplinas matriculadas.</p>
+      } @else {
+        <table class="tabela-menor">
+          <thead>
+            <tr>
+              <th scope="col">Disciplina</th>
+              <th scope="col">Semestre</th>
+              <th scope="col">AV1</th>
+              <th scope="col">AV2</th>
+              <th scope="col">Final</th>
+              <th scope="col">Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (disciplina of detalhe.disciplinas; track rastrearDisciplina($index, disciplina)) {
+              <tr>
+                <td>{{ disciplina.codigo }} — {{ disciplina.nome }}</td>
+                <td>{{ disciplina.semestre_letivo }}</td>
+                <td>{{ formatarNota(disciplina.nota_av1) }}</td>
+                <td>{{ formatarNota(disciplina.nota_av2) }}</td>
+                <td>{{ formatarNota(disciplina.nota_final) }}</td>
+                <td>{{ rotuloStatusDisciplina(disciplina.status_disciplina) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      <h3>Mensalidades</h3>
+      @if (detalhe.mensalidades.length === 0) {
+        <p class="aviso">Aluno sem mensalidades registradas.</p>
+      } @else {
+        <table class="tabela-menor">
+          <thead>
+            <tr>
+              <th scope="col">Referência</th>
+              <th scope="col">Vencimento</th>
+              <th scope="col">Valor</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (mensalidade of detalhe.mensalidades; track rastrearMensalidade($index, mensalidade)) {
+              <tr>
+                <td>{{ formatarMes(mensalidade.mes_referencia) }}</td>
+                <td>{{ formatarData(mensalidade.data_vencimento) }}</td>
+                <td>{{ formatarValor(mensalidade.valor_original) }}</td>
+                <td>{{ rotuloStatusPagamento(mensalidade.status_pagamento) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  }
+</section>
