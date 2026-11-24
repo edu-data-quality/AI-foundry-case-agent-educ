@@ -13,8 +13,9 @@ Regra de consistência:
 """
 
 import uuid
+from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
@@ -49,7 +50,7 @@ class CadastroAluno(BaseModel):
 
 
 class AlunoResposta(BaseModel):
-    """Contrato de retorno do cadastro de aluno."""
+    """Contrato de retorno do cadastro/consulta de aluno."""
 
     id: str
     cpf: str
@@ -59,6 +60,38 @@ class AlunoResposta(BaseModel):
     curso: str | None = None
     polo: str | None = None
     status_matricula: StatusMatricula
+
+
+class DisciplinaAlunoResposta(BaseModel):
+    """Notas e situação do aluno em uma disciplina (detalhe admin)."""
+
+    disciplina_id: str
+    codigo: str
+    nome: str
+    semestre_letivo: str
+    nota_av1: float | None = None
+    nota_av2: float | None = None
+    nota_final: float | None = None
+    status_disciplina: StatusDisciplina
+
+
+class MensalidadeAlunoResposta(BaseModel):
+    """Boleto/mensalidade exibido no detalhe do aluno (detalhe admin)."""
+
+    id: str
+    aluno_id: str
+    mes_referencia: str
+    valor_original: float
+    data_vencimento: date
+    status_pagamento: StatusPagamento
+
+
+class AlunoDetalheResposta(BaseModel):
+    """Contrato do `GET /api/admin/alunos/{aluno_id}`: aluno + histórico."""
+
+    aluno: AlunoResposta
+    disciplinas: list[DisciplinaAlunoResposta]
+    mensalidades: list[MensalidadeAlunoResposta]
 
 
 class NotasMatricula(BaseModel):
@@ -119,6 +152,86 @@ def _aluno_ou_404(aluno_id: uuid.UUID, sessao: Session):
     return aluno
 
 
+def _aluno_resposta(aluno) -> AlunoResposta:
+    """Converte o modelo ORM no contrato público `AlunoResposta`."""
+    return AlunoResposta(
+        id=str(aluno.id),
+        cpf=aluno.cpf,
+        nome_completo=aluno.nome_completo,
+        email=aluno.email,
+        telefone=aluno.telefone,
+        curso=aluno.curso,
+        polo=aluno.polo,
+        status_matricula=aluno.status_matricula,
+    )
+
+
+@router.get(
+    "/alunos",
+    response_model=list[AlunoResposta],
+    responses={
+        403: {"description": "Aluno autenticado tentando usar endpoint admin"},
+    },
+)
+def listar_alunos(
+    busca: str | None = Query(
+        default=None,
+        description="Nome (trecho, case-insensitive) ou CPF (prefixo, só dígitos)",
+    ),
+    _: object = Depends(requer_admin),
+    sessao: Session = Depends(get_db),
+) -> list[AlunoResposta]:
+    """Lista e busca alunos por nome ou CPF (US4.1 — listagem do painel)."""
+    alunos = AlunoRepository(sessao).listar(busca=busca)
+    return [_aluno_resposta(aluno) for aluno in alunos]
+
+
+@router.get(
+    "/alunos/{aluno_id}",
+    response_model=AlunoDetalheResposta,
+    responses={
+        403: {"description": "Aluno autenticado tentando usar endpoint admin"},
+        404: {"description": "Aluno não encontrado"},
+    },
+)
+def detalhar_aluno(
+    aluno_id: uuid.UUID,
+    _: object = Depends(requer_admin),
+    sessao: Session = Depends(get_db),
+) -> AlunoDetalheResposta:
+    """Detalhe do aluno com disciplinas e mensalidades (US4.1)."""
+    aluno = _aluno_ou_404(aluno_id, sessao)
+    matriculas = MatriculaRepository(sessao).listar_por_aluno(aluno.id)
+    mensalidades = MensalidadeRepository(sessao).listar_por_aluno(aluno.id)
+    return AlunoDetalheResposta(
+        aluno=_aluno_resposta(aluno),
+        disciplinas=[
+            DisciplinaAlunoResposta(
+                disciplina_id=str(matricula.disciplina_id),
+                codigo=matricula.disciplina.codigo,
+                nome=matricula.disciplina.nome,
+                semestre_letivo=matricula.semestre_letivo,
+                nota_av1=matricula.nota_av1,
+                nota_av2=matricula.nota_av2,
+                nota_final=matricula.nota_final,
+                status_disciplina=matricula.status_disciplina,
+            )
+            for matricula in matriculas
+        ],
+        mensalidades=[
+            MensalidadeAlunoResposta(
+                id=str(mensalidade.id),
+                aluno_id=str(mensalidade.aluno_id),
+                mes_referencia=mensalidade.mes_referencia,
+                valor_original=float(mensalidade.valor_original),
+                data_vencimento=mensalidade.data_vencimento,
+                status_pagamento=mensalidade.status_pagamento,
+            )
+            for mensalidade in mensalidades
+        ],
+    )
+
+
 @router.post(
     "/alunos",
     response_model=AlunoResposta,
@@ -149,16 +262,7 @@ def criar_aluno(
         curso=payload.curso,
         polo=payload.polo,
     )
-    return AlunoResposta(
-        id=str(aluno.id),
-        cpf=aluno.cpf,
-        nome_completo=aluno.nome_completo,
-        email=aluno.email,
-        telefone=aluno.telefone,
-        curso=aluno.curso,
-        polo=aluno.polo,
-        status_matricula=aluno.status_matricula,
-    )
+    return _aluno_resposta(aluno)
 
 
 @router.patch(
@@ -254,13 +358,4 @@ def alterar_status_matricula(
     aluno = AlunoRepository(sessao).atualizar_status_matricula(
         aluno_id, status_matricula=payload.status
     )
-    return AlunoResposta(
-        id=str(aluno.id),
-        cpf=aluno.cpf,
-        nome_completo=aluno.nome_completo,
-        email=aluno.email,
-        telefone=aluno.telefone,
-        curso=aluno.curso,
-        polo=aluno.polo,
-        status_matricula=aluno.status_matricula,
-    )
+    return _aluno_resposta(aluno)

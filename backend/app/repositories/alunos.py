@@ -57,3 +57,18 @@ class AlunoRepository:
     def buscar_por_cpf(self, cpf: str) -> Aluno | None:
         """Busca pelo CPF, chave de identificação usada pelas tools."""
         return self._sessao.scalar(select(Aluno).where(Aluno.cpf == cpf))
+
+    def listar(self, *, busca: str | None = None, limite: int = 50) -> list[Aluno]:
+        """Lista alunos, filtrando por nome (parcial) ou CPF (prefixo).
+
+        `busca` com apenas dígitos é tratada como CPF; caso contrário, como
+        trecho do nome (case-insensitive). Vazia/ausente devolve a listagem
+        completa, ordenada por nome, limitada a `limite` registros.
+        """
+        consulta = select(Aluno).order_by(Aluno.nome_completo)
+        termo = (busca or "").strip()
+        if termo.isdigit():
+            consulta = consulta.where(Aluno.cpf.startswith(termo))
+        elif termo:
+            consulta = consulta.where(Aluno.nome_completo.ilike(f"%{termo}%"))
+        return list(self._sessao.scalars(consulta.limit(limite)))

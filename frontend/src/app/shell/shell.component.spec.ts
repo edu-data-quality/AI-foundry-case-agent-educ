@@ -48,6 +48,7 @@ describe('ShellComponent', () => {
     const { fixture } = await montar(Role.ADMIN);
     const texto = fixture.nativeElement.textContent;
     expect(texto).toContain('Painel');
+    expect(texto).toContain('Alunos');
     expect(texto).not.toContain('Chat');
   });
 

@@ -17,3 +17,15 @@ def int_env(variavel: str, padrao: int, *, minimo: int = 1) -> int:
         return max(minimo, int(raw))
     except ValueError:
         return padrao
+
+
+def lista_env(variavel: str, padrao: list[str]) -> list[str]:
+    """Lê uma lista separada por vírgulas; usa `padrao` se ausente/vazia.
+
+    Itens vazios e espaços em volta são descartados
+    (ex: `CORS_ORIGINS="http://a, http://b,"`).
+    """
+    raw = os.getenv(variavel)
+    if raw is None or not raw.strip():
+        return padrao
+    return [item.strip() for item in raw.split(",") if item.strip()]

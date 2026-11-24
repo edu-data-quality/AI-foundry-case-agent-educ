@@ -314,6 +314,7 @@ def test_endpoints_admin_documentados_no_openapi() -> None:
     """Os contratos admin aparecem no OpenAPI do próprio backend."""
     pe = app.openapi()["paths"]
     assert "/api/admin/alunos" in pe
+    assert "/api/admin/alunos/{aluno_id}" in pe
     assert "/api/admin/alunos/{aluno_id}/matriculas/{matricula_id}/notas" in pe
     assert "/api/admin/mensalidades/{mensalidade_id}/status" in pe
     assert "/api/admin/alunos/{aluno_id}/matricula-status" in pe
@@ -331,3 +332,137 @@ def test_status_matricula_invalido_retorna_422(
     )
 
     assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# GET /api/admin/alunos (listagem + busca) — issue #16
+# ---------------------------------------------------------------------------
+
+
+def _criar_segundo_aluno(sessao: Session):
+    """Cria um aluno adicional para exercitar listagem e busca."""
+    return AlunoRepository(sessao).criar(
+        cpf=CPF_NOVO,
+        nome_completo="Bruno Souza",
+        email="bruno@exemplo.com",
+        curso="ADS",
+        polo="Recife",
+    )
+
+
+def test_admin_lista_alunos_ordenado_por_nome(
+    sessao: Session, client: TestClient
+) -> None:
+    _montar_ambiente(sessao)
+    _criar_segundo_aluno(sessao)
+    _fazer_login(client, "admin", "admin123")
+
+    response = client.get("/api/admin/alunos")
+
+    assert response.status_code == 200
+    corpo = response.json()
+    assert [aluno["nome_completo"] for aluno in corpo] == ["Aluna Teste", "Bruno Souza"]
+    assert corpo[0]["cpf"] == CPF_ALUNO
+    assert corpo[0]["curso"] == "ADS"
+    assert corpo[0]["polo"] == "São Paulo"
+    assert corpo[0]["status_matricula"] == "ATIVO"
+
+
+def test_admin_busca_aluno_por_nome_parcial_sem_case(
+    sessao: Session, client: TestClient
+) -> None:
+    _montar_ambiente(sessao)
+    _criar_segundo_aluno(sessao)
+    _fazer_login(client, "admin", "admin123")
+
+    response = client.get("/api/admin/alunos", params={"busca": "bruNO"})
+
+    assert response.status_code == 200
+    corpo = response.json()
+    assert [aluno["nome_completo"] for aluno in corpo] == ["Bruno Souza"]
+
+
+def test_admin_busca_aluno_por_prefixo_de_cpf(
+    sessao: Session, client: TestClient
+) -> None:
+    _montar_ambiente(sessao)
+    _criar_segundo_aluno(sessao)
+    _fazer_login(client, "admin", "admin123")
+
+    response = client.get("/api/admin/alunos", params={"busca": "999"})
+
+    assert response.status_code == 200
+    corpo = response.json()
+    assert [aluno["cpf"] for aluno in corpo] == [CPF_NOVO]
+
+
+def test_admin_busca_sem_resultado_retorna_lista_vazia(
+    sessao: Session, client: TestClient
+) -> None:
+    _montar_ambiente(sessao)
+    _fazer_login(client, "admin", "admin123")
+
+    response = client.get("/api/admin/alunos", params={"busca": "inexistente"})
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_aluno_comum_recebe_403_na_listagem_e_no_detalhe(
+    sessao: Session, client: TestClient
+) -> None:
+    _, aluno_id, _, _ = _montar_ambiente(sessao)
+    _fazer_login(client, "aluna", "aluna123")
+
+    assert client.get("/api/admin/alunos").status_code == 403
+    assert client.get(f"/api/admin/alunos/{aluno_id}").status_code == 403
+
+
+def test_listagem_sem_token_recebe_401(sessao: Session, client: TestClient) -> None:
+    _montar_ambiente(sessao)
+
+    assert client.get("/api/admin/alunos").status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /api/admin/alunos/{aluno_id} (detalhe) — issue #16
+# ---------------------------------------------------------------------------
+
+
+def test_admin_detalha_aluno_com_disciplinas_e_mensalidades(
+    sessao: Session, client: TestClient
+) -> None:
+    _, aluno_id, _, _ = _montar_ambiente(sessao)
+    _fazer_login(client, "admin", "admin123")
+
+    response = client.get(f"/api/admin/alunos/{aluno_id}")
+
+    assert response.status_code == 200
+    corpo = response.json()
+    assert corpo["aluno"]["id"] == str(aluno_id)
+    assert corpo["aluno"]["nome_completo"] == "Aluna Teste"
+
+    assert len(corpo["disciplinas"]) == 1
+    disciplina = corpo["disciplinas"][0]
+    assert disciplina["codigo"] == "ADS101"
+    assert disciplina["nome"] == "Algoritmos"
+    assert disciplina["semestre_letivo"] == "2026.1"
+    assert disciplina["status_disciplina"] == "AGUARDANDO_NOTA"
+
+    assert len(corpo["mensalidades"]) == 1
+    mensalidade = corpo["mensalidades"][0]
+    assert mensalidade["mes_referencia"] == "2026-11"
+    assert mensalidade["valor_original"] == 450.0
+    assert mensalidade["data_vencimento"] == "2026-11-10"
+    assert mensalidade["status_pagamento"] == "PENDENTE"
+
+
+def test_detalhe_aluno_inexistente_retorna_404(
+    sessao: Session, client: TestClient
+) -> None:
+    _montar_ambiente(sessao)
+    _fazer_login(client, "admin", "admin123")
+
+    response = client.get(f"/api/admin/alunos/{uuid.uuid4()}")
+
+    assert response.status_code == 404
