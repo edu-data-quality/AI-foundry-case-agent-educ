@@ -6,12 +6,14 @@ import { roleGuard } from './core/auth/role.guard';
 import { LoginComponent } from './login/login.component';
 import { AdminPainelComponent } from './pages/admin-painel/admin-painel.component';
 import { AlunoChatComponent } from './pages/aluno-chat/aluno-chat.component';
+import { DashboardAlunoComponent } from './pages/dashboard-aluno/dashboard-aluno.component';
 import { ShellComponent } from './shell/shell.component';
 
 /**
- * Rotas do portal (issue #13): login aberto; áreas `/aluno` e `/admin`
+ * Rotas do portal (issues #13 + #15): login aberto; áreas `/aluno` e `/admin`
  * protegidas por `authGuard` (sessão) + `roleGuard` (role correta), com o
- * shell como layout compartilhado.
+ * shell como layout compartilhado. O dashboard acadêmico (#15) vive em
+ * `/aluno/dashboard`.
  */
 export const routes: Routes = [
   {
@@ -29,6 +31,11 @@ export const routes: Routes = [
         pathMatch: 'full',
         component: AlunoChatComponent,
         title: 'Chat | Área do Aluno',
+      },
+      {
+        path: 'dashboard',
+        component: DashboardAlunoComponent,
+        title: 'Dashboard Académico | Área do Aluno',
       },
     ],
   },
