@@ -64,8 +64,13 @@ class AlunoResposta(BaseModel):
 
 
 class DisciplinaAlunoResposta(BaseModel):
-    """Notas e situação do aluno em uma disciplina (detalhe admin)."""
+    """Notas e situação do aluno em uma disciplina (detalhe admin).
 
+    `matricula_id` é o identificador usado pelo simulador (US4.2) para lançar
+    notas via `PATCH /api/admin/alunos/{aluno_id}/matriculas/{matricula_id}/notas`.
+    """
+
+    matricula_id: str
     disciplina_id: str
     codigo: str
     nome: str
@@ -208,6 +213,7 @@ def detalhar_aluno(
         aluno=_aluno_resposta(aluno),
         disciplinas=[
             DisciplinaAlunoResposta(
+                matricula_id=str(matricula.id),
                 disciplina_id=str(matricula.disciplina_id),
                 codigo=matricula.disciplina.codigo,
                 nome=matricula.disciplina.nome,

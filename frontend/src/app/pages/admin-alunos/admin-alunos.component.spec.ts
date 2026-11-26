@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { environment } from '../../../environments/environment';
 import { AlunoDetalhe, AlunoResumo } from '../../models/admin-aluno';
@@ -35,6 +36,7 @@ const DETALHE: AlunoDetalhe = {
   aluno: ALUNOS[0],
   disciplinas: [
     {
+      matricula_id: 'uuid-mat-1',
       disciplina_id: 'uuid-d1',
       codigo: 'ADS101',
       nome: 'Algoritmos',
@@ -63,7 +65,7 @@ describe('AdminAlunosComponent', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [AdminAlunosComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     });
     http = TestBed.inject(HttpTestingController);
   });
@@ -319,5 +321,164 @@ describe('AdminAlunosComponent', () => {
 
     http.expectNone((r) => r.url === URL_BASE && r.method === 'POST');
     expect(fixture.nativeElement.textContent).toContain('CPF inválido.');
+  });
+
+  // -------------------------------------------------------------------------
+  // Simulador em runtime — issue #18 / US4.2
+  // -------------------------------------------------------------------------
+
+  /** Abre o detalhe do primeiro aluno da listagem. */
+  function abrirDetalhe(fixture: ReturnType<typeof criarComponente>) {
+    const botao = fixture.nativeElement.querySelector(
+      'table.tabela-alunos button.acao',
+    ) as HTMLButtonElement;
+    botao.click();
+    http.expectOne(`${URL_BASE}/${ALUNOS[0].id}`).flush(DETALHE);
+    fixture.detectChanges();
+  }
+
+  it('exibe os controles do simulador e o link do chat no detalhe', () => {
+    const fixture = criarComponente();
+    abrirDetalhe(fixture);
+
+    expect(
+      fixture.nativeElement.querySelectorAll('table.tabela-simulador input.nota').length,
+    ).toBe(3);
+    expect(
+      fixture.nativeElement.querySelector('#status-matricula'),
+    ).not.toBeNull();
+    const link = fixture.nativeElement.querySelector('a.link-chat') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toContain('/aluno');
+    expect(link.getAttribute('href')).toContain('cpf=11122233344');
+  });
+
+  it('lança notas pelo PATCH e exibe "dados atualizados"', () => {
+    const fixture = criarComponente();
+    abrirDetalhe(fixture);
+    const componente = fixture.componentInstance;
+    const disciplina = componente.detalhe!.disciplinas[0];
+
+    const notas = fixture.nativeElement.querySelectorAll(
+      'table.tabela-simulador input.nota',
+    ) as NodeListOf<HTMLInputElement>;
+    notas[0].value = '9.5';
+    notas[0].dispatchEvent(new Event('input'));
+    notas[2].value = '8';
+    notas[2].dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const botao = fixture.nativeElement.querySelector(
+      'table.tabela-simulador button.acao',
+    ) as HTMLButtonElement;
+    botao.click();
+
+    const req = http.expectOne(
+      `${URL_BASE}/${ALUNOS[0].id}/matriculas/${disciplina.matricula_id}/notas`,
+    );
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({
+      nota_av1: 9.5,
+      nota_av2: 7,
+      nota_final: 8,
+      status_disciplina: 'EM_ANDAMENTO',
+    });
+    req.flush({
+      id: disciplina.matricula_id,
+      disciplina_id: disciplina.disciplina_id,
+      semestre_letivo: disciplina.semestre_letivo,
+      nota_av1: 9.5,
+      nota_av2: 7,
+      nota_final: 8,
+      status_disciplina: 'EM_ANDAMENTO',
+    });
+    fixture.detectChanges();
+
+    expect(componente.detalhe!.disciplinas[0].nota_av1).toBe(9.5);
+    expect(fixture.nativeElement.textContent).toContain('Notas de Algoritmos atualizadas.');
+  });
+
+  it('bloqueia nota fora da faixa sem chamar a API', () => {
+    const fixture = criarComponente();
+    abrirDetalhe(fixture);
+    const componente = fixture.componentInstance;
+    const disciplina = componente.detalhe!.disciplinas[0];
+    componente.notasRascunho[disciplina.matricula_id].nota_av1 = 11;
+    fixture.detectChanges();
+
+    const botao = fixture.nativeElement.querySelector(
+      'table.tabela-simulador button.acao',
+    ) as HTMLButtonElement;
+    expect(botao.disabled).toBeTrue();
+    componente.salvarNotas(disciplina);
+    fixture.detectChanges();
+
+    http.expectNone(
+      (r) => r.method === 'PATCH' && r.url.includes('/notas'),
+    );
+    expect(fixture.nativeElement.textContent).toContain('As notas devem estar entre 0 e 10.');
+  });
+
+  it('altera o status do boleto pelo PATCH e exibe "dados atualizados"', () => {
+    const fixture = criarComponente();
+    abrirDetalhe(fixture);
+    const componente = fixture.componentInstance;
+    const mensalidade = componente.detalhe!.mensalidades[0];
+
+    const tabelaMensalidades = fixture.nativeElement.querySelectorAll(
+      'table.tabela-simulador',
+    )[1] as HTMLTableElement;
+    const select = tabelaMensalidades.querySelector('select') as HTMLSelectElement;
+    select.value = 'PAGO';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const botaoBoleto = tabelaMensalidades.querySelector(
+      'button.acao',
+    ) as HTMLButtonElement;
+    botaoBoleto.click();
+
+    const req = http.expectOne(
+      `${environment.apiUrl}/api/admin/mensalidades/${mensalidade.id}/status`,
+    );
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ status: 'PAGO' });
+    req.flush({
+      id: mensalidade.id,
+      aluno_id: mensalidade.aluno_id,
+      mes_referencia: mensalidade.mes_referencia,
+      status_pagamento: 'PAGO',
+    });
+    fixture.detectChanges();
+
+    expect(componente.detalhe!.mensalidades[0].status_pagamento).toBe('PAGO');
+    expect(fixture.nativeElement.textContent).toContain('Boleto 2026-11 atualizado para Pago.');
+  });
+
+  it('altera o status de matrícula pelo PATCH e reflete na listagem', () => {
+    const fixture = criarComponente();
+    abrirDetalhe(fixture);
+    const componente = fixture.componentInstance;
+
+    const select = fixture.nativeElement.querySelector(
+      '#status-matricula',
+    ) as HTMLSelectElement;
+    select.value = 'TRANCADO';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const botao = fixture.nativeElement.querySelector(
+      '.editor-linha button.acao',
+    ) as HTMLButtonElement;
+    botao.click();
+
+    const req = http.expectOne(`${URL_BASE}/${ALUNOS[0].id}/matricula-status`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ status: 'TRANCADO' });
+    req.flush({ ...ALUNOS[0], status_matricula: 'TRANCADO' });
+    fixture.detectChanges();
+
+    expect(componente.detalhe!.aluno.status_matricula).toBe('TRANCADO');
+    expect(componente.alunos[0].status_matricula).toBe('TRANCADO');
+    expect(fixture.nativeElement.textContent).toContain('Matrícula atualizada para Trancado.');
   });
 });

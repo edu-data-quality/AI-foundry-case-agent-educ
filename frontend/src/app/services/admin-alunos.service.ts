@@ -7,13 +7,19 @@ import {
   AlunoDetalhe,
   AlunoResumo,
   CadastroAlunoPayload,
+  MatriculaAtualizada,
+  MensalidadeAtualizada,
+  NotasMatriculaPayload,
+  StatusPagamento,
 } from '../models/admin-aluno';
+import { StatusMatricula } from '../models/status-academico';
 
 /**
- * Consome os endpoints admin de alunos (issues #16 e #17):
+ * Consome os endpoints admin de alunos (issues #16, #17 e #18):
  * `GET /api/admin/alunos?busca=` (listagem/busca),
- * `GET /api/admin/alunos/{id}` (detalhe) e
- * `POST /api/admin/alunos` (cadastro para testes E2E).
+ * `GET /api/admin/alunos/{id}` (detalhe),
+ * `POST /api/admin/alunos` (cadastro para testes E2E) e os PATCHs do
+ * simulador — notas, status de boleto e status de matrícula.
  *
  * O backend exige JWT de ADMIN; o header entra pelo `authInterceptor`.
  */
@@ -40,5 +46,39 @@ export class AdminAlunosService {
   /** Cadastra um novo aluno com dados fictícios para testes E2E. */
   criar(payload: CadastroAlunoPayload): Observable<AlunoResumo> {
     return this.http.post<AlunoResumo>(this.urlBase, payload);
+  }
+
+  /** Lança AV1/AV2/final e a situação da disciplina (simulador US4.2). */
+  lancarNotas(
+    alunoId: string,
+    matriculaId: string,
+    payload: NotasMatriculaPayload,
+  ): Observable<MatriculaAtualizada> {
+    return this.http.patch<MatriculaAtualizada>(
+      `${this.urlBase}/${alunoId}/matriculas/${matriculaId}/notas`,
+      payload,
+    );
+  }
+
+  /** Altera o status do boleto (PENDENTE/PAGO/ATRASADO) em runtime. */
+  alterarStatusMensalidade(
+    mensalidadeId: string,
+    status: StatusPagamento,
+  ): Observable<MensalidadeAtualizada> {
+    return this.http.patch<MensalidadeAtualizada>(
+      `${environment.apiUrl}/api/admin/mensalidades/${mensalidadeId}/status`,
+      { status },
+    );
+  }
+
+  /** Altera o status de matrícula do aluno (ATIVO/TRANCADO/CONCLUIDO/INADIMPLENTE). */
+  alterarStatusMatricula(
+    alunoId: string,
+    status: StatusMatricula,
+  ): Observable<AlunoResumo> {
+    return this.http.patch<AlunoResumo>(
+      `${this.urlBase}/${alunoId}/matricula-status`,
+      { status },
+    );
   }
 }
