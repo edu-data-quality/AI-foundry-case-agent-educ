@@ -47,6 +47,7 @@ class CadastroAluno(BaseModel):
     telefone: str | None = None
     curso: str | None = None
     polo: str | None = None
+    status_matricula: StatusMatricula = StatusMatricula.ATIVO
 
 
 class AlunoResposta(BaseModel):
@@ -261,6 +262,7 @@ def criar_aluno(
         telefone=payload.telefone,
         curso=payload.curso,
         polo=payload.polo,
+        status_matricula=payload.status_matricula,
     )
     return _aluno_resposta(aluno)
 
