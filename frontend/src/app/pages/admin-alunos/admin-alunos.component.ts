@@ -6,6 +6,7 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 import { cpfValidator } from '../../core/validators/cpf.validator';
 import {
@@ -14,6 +15,8 @@ import {
   CadastroAlunoPayload,
   DisciplinaAluno,
   MensalidadeAluno,
+  NotasMatriculaPayload,
+  StatusDisciplina,
   StatusPagamento,
 } from '../../models/admin-aluno';
 import { StatusMatricula } from '../../models/status-academico';
@@ -26,7 +29,7 @@ const ROTULO_STATUS_MATRICULA: Record<StatusMatricula, string> = {
   INADIMPLENTE: 'Inadimplente',
 };
 
-const ROTULO_STATUS_DISCIPLINA: Record<DisciplinaAluno['status_disciplina'], string> = {
+const ROTULO_STATUS_DISCIPLINA: Record<StatusDisciplina, string> = {
   EM_ANDAMENTO: 'Em andamento',
   APROVADO: 'Aprovado',
   REPROVADO: 'Reprovado',
@@ -39,6 +42,14 @@ const ROTULO_STATUS_PAGAMENTO: Record<StatusPagamento, string> = {
   ATRASADO: 'Atrasado',
 };
 
+/** Rascunho editável das notas de uma matrícula (simulador US4.2). */
+interface NotasRascunho {
+  nota_av1: number | null;
+  nota_av2: number | null;
+  nota_final: number | null;
+  status_disciplina: StatusDisciplina;
+}
+
 type CampoFormulario =
   | 'nome_completo'
   | 'cpf'
@@ -49,16 +60,17 @@ type CampoFormulario =
   | 'status_matricula';
 
 /**
- * Área admin de alunos — /admin/alunos (issues #16 e #17, US4.1).
+ * Área admin de alunos — /admin/alunos (issues #16, #17 e #18, US4.1/US4.2).
  *
  * Lista alunos, busca por nome/CPF na API Admin e abre o detalhe com
  * disciplinas e mensalidades. O formulário de cadastro (#17) envia dados
- * fictícios para `POST /api/admin/alunos` e deixa o aluno consultável de
- * imediato pelo agente/teste E2E.
+ * fictícios para `POST /api/admin/alunos`; o simulador (#18) lança notas,
+ * altera status de boleto e de matrícula pelos PATCHs da API Admin e reflete
+ * o resultado na hora (S4/S14), sem reiniciar o banco.
  */
 @Component({
   selector: 'app-admin-alunos',
-  imports: [FormsModule, ReactiveFormsModule],
+  imports: [FormsModule, ReactiveFormsModule, RouterLink],
   templateUrl: './admin-alunos.component.html',
   styleUrl: './admin-alunos.component.css',
 })
@@ -73,6 +85,19 @@ export class AdminAlunosComponent implements OnInit {
     'INADIMPLENTE',
   ];
 
+  readonly statusDisciplinaOpcoes: StatusDisciplina[] = [
+    'EM_ANDAMENTO',
+    'APROVADO',
+    'REPROVADO',
+    'AGUARDANDO_NOTA',
+  ];
+
+  readonly statusPagamentoOpcoes: StatusPagamento[] = [
+    'PENDENTE',
+    'PAGO',
+    'ATRASADO',
+  ];
+
   alunos: AlunoResumo[] = [];
   busca = '';
   carregando = false;
@@ -81,6 +106,16 @@ export class AdminAlunosComponent implements OnInit {
   detalhe: AlunoDetalhe | null = null;
   carregandoDetalhe = false;
   erroDetalhe = false;
+
+  /** Estado do simulador em runtime (issue #18 / US4.2). */
+  notasRascunho: Record<string, NotasRascunho> = {};
+  statusPagamentoRascunho: Record<string, StatusPagamento> = {};
+  statusMatriculaSelecionado: StatusMatricula = 'ATIVO';
+  salvandoNotas: Record<string, boolean> = {};
+  salvandoMensalidade: Record<string, boolean> = {};
+  salvandoStatusMatricula = false;
+  mensagemAtualizacao = '';
+  erroAtualizacao = '';
 
   /** Estado do formulário de cadastro (US4.1). */
   formularioAberto = false;
@@ -194,9 +229,12 @@ export class AdminAlunosComponent implements OnInit {
     this.carregandoDetalhe = true;
     this.erroDetalhe = false;
     this.detalhe = null;
+    this.mensagemAtualizacao = '';
+    this.erroAtualizacao = '';
     this.alunosService.detalhar(aluno.id).subscribe({
       next: (detalhe) => {
         this.detalhe = detalhe;
+        this.inicializarSimulador(detalhe);
         this.carregandoDetalhe = false;
       },
       error: () => {
@@ -209,6 +247,119 @@ export class AdminAlunosComponent implements OnInit {
   fecharDetalhe(): void {
     this.detalhe = null;
     this.erroDetalhe = false;
+    this.mensagemAtualizacao = '';
+    this.erroAtualizacao = '';
+  }
+
+  /** `true` quando as notas do rascunho respeitam a faixa 0–10. */
+  notasValidas(disciplina: DisciplinaAluno): boolean {
+    const rascunho = this.notasRascunho[disciplina.matricula_id];
+    if (rascunho === undefined) {
+      return false;
+    }
+    return [rascunho.nota_av1, rascunho.nota_av2, rascunho.nota_final].every(
+      (nota) => nota === null || (Number.isFinite(nota) && nota >= 0 && nota <= 10),
+    );
+  }
+
+  /** Lança as notas do rascunho no PATCH da API Admin (US4.2). */
+  salvarNotas(disciplina: DisciplinaAluno): void {
+    this.erroAtualizacao = '';
+    this.mensagemAtualizacao = '';
+    if (this.detalhe === null) {
+      return;
+    }
+    if (!this.notasValidas(disciplina)) {
+      this.erroAtualizacao = 'As notas devem estar entre 0 e 10.';
+      return;
+    }
+
+    const rascunho = this.notasRascunho[disciplina.matricula_id];
+    const payload: NotasMatriculaPayload = {
+      nota_av1: rascunho.nota_av1,
+      nota_av2: rascunho.nota_av2,
+      nota_final: rascunho.nota_final,
+      status_disciplina: rascunho.status_disciplina,
+    };
+    this.salvandoNotas[disciplina.matricula_id] = true;
+
+    this.alunosService
+      .lancarNotas(this.detalhe.aluno.id, disciplina.matricula_id, payload)
+      .subscribe({
+        next: (atualizada) => {
+          disciplina.nota_av1 = atualizada.nota_av1;
+          disciplina.nota_av2 = atualizada.nota_av2;
+          disciplina.nota_final = atualizada.nota_final;
+          disciplina.status_disciplina = atualizada.status_disciplina;
+          this.salvandoNotas[disciplina.matricula_id] = false;
+          this.mensagemAtualizacao = `Notas de ${disciplina.nome} atualizadas.`;
+        },
+        error: (erro: HttpErrorResponse) => {
+          this.salvandoNotas[disciplina.matricula_id] = false;
+          this.erroAtualizacao = this.mensagemErroAtualizacao(erro);
+        },
+      });
+  }
+
+  /** Altera o status do boleto selecionado no rascunho (US4.2). */
+  salvarStatusMensalidade(mensalidade: MensalidadeAluno): void {
+    this.erroAtualizacao = '';
+    this.mensagemAtualizacao = '';
+    const status = this.statusPagamentoRascunho[mensalidade.id];
+    if (status === undefined || status === mensalidade.status_pagamento) {
+      return;
+    }
+
+    this.salvandoMensalidade[mensalidade.id] = true;
+    this.alunosService
+      .alterarStatusMensalidade(mensalidade.id, status)
+      .subscribe({
+        next: (atualizada) => {
+          mensalidade.status_pagamento = atualizada.status_pagamento;
+          this.salvandoMensalidade[mensalidade.id] = false;
+          this.mensagemAtualizacao = `Boleto ${
+            mensalidade.mes_referencia
+          } atualizado para ${this.rotuloStatusPagamento(
+            atualizada.status_pagamento,
+          )}.`;
+        },
+        error: (erro: HttpErrorResponse) => {
+          this.salvandoMensalidade[mensalidade.id] = false;
+          this.erroAtualizacao = this.mensagemErroAtualizacao(erro);
+        },
+      });
+  }
+
+  /** Altera o status de matrícula do aluno aberto no detalhe (US4.2). */
+  salvarStatusMatricula(): void {
+    this.erroAtualizacao = '';
+    this.mensagemAtualizacao = '';
+    if (this.detalhe === null) {
+      return;
+    }
+    if (this.statusMatriculaSelecionado === this.detalhe.aluno.status_matricula) {
+      return;
+    }
+
+    this.salvandoStatusMatricula = true;
+    this.alunosService
+      .alterarStatusMatricula(this.detalhe.aluno.id, this.statusMatriculaSelecionado)
+      .subscribe({
+        next: (aluno) => {
+          if (this.detalhe !== null) {
+            this.detalhe.aluno = aluno;
+          }
+          this.atualizarAlunoNaListagem(aluno);
+          this.salvandoStatusMatricula = false;
+          this.mensagemAtualizacao = `Matrícula atualizada para ${this.rotuloStatusMatricula(
+            aluno.status_matricula,
+          )}.`;
+        },
+        error: (erro: HttpErrorResponse) => {
+          this.salvandoStatusMatricula = false;
+          this.erroAtualizacao = this.mensagemErroAtualizacao(erro);
+        },
+      });
   }
 
   rotuloStatusMatricula(status: StatusMatricula): string {
@@ -251,6 +402,45 @@ export class AdminAlunosComponent implements OnInit {
 
   rastrearMensalidade(_: number, mensalidade: MensalidadeAluno): string {
     return mensalidade.id;
+  }
+
+  /** Copia o estado atual do detalhe para os rascunhos do simulador. */
+  private inicializarSimulador(detalhe: AlunoDetalhe): void {
+    this.statusMatriculaSelecionado = detalhe.aluno.status_matricula;
+    this.notasRascunho = {};
+    for (const disciplina of detalhe.disciplinas) {
+      this.notasRascunho[disciplina.matricula_id] = {
+        nota_av1: disciplina.nota_av1,
+        nota_av2: disciplina.nota_av2,
+        nota_final: disciplina.nota_final,
+        status_disciplina: disciplina.status_disciplina,
+      };
+    }
+    this.statusPagamentoRascunho = {};
+    for (const mensalidade of detalhe.mensalidades) {
+      this.statusPagamentoRascunho[mensalidade.id] = mensalidade.status_pagamento;
+    }
+  }
+
+  /** Mantém a linha da listagem sincronizada com o detalhe editado. */
+  private atualizarAlunoNaListagem(aluno: AlunoResumo): void {
+    const indice = this.alunos.findIndex((item) => item.id === aluno.id);
+    if (indice >= 0) {
+      this.alunos[indice] = aluno;
+    }
+  }
+
+  private mensagemErroAtualizacao(erro: HttpErrorResponse): string {
+    if (erro.status === 403) {
+      return 'Acesso negado. Apenas administradores podem alterar dados.';
+    }
+    if (erro.status === 404) {
+      return 'Registro não encontrado. Recarregue o detalhe do aluno.';
+    }
+    if (erro.status === 422) {
+      return 'Dados inválidos. Revise as notas e os status escolhidos.';
+    }
+    return 'Não foi possível atualizar o dado. Tente novamente.';
   }
 
   private mensagemErroCadastro(erro: HttpErrorResponse): string {

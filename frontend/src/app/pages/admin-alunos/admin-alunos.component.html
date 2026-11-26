@@ -198,19 +198,70 @@
             CPF {{ detalhe.aluno.cpf }} · {{ detalhe.aluno.curso ?? 'Curso não informado' }} ·
             {{ detalhe.aluno.polo ?? 'Polo não informado' }}
           </p>
-          <p class="subtitulo">
-            {{ detalhe.aluno.email }} · Matrícula:
-            {{ rotuloStatusMatricula(detalhe.aluno.status_matricula) }}
-          </p>
+          <p class="subtitulo">{{ detalhe.aluno.email }}</p>
         </div>
         <button type="button" class="acao" (click)="fecharDetalhe()">Fechar</button>
       </header>
+
+      <div class="simulador-topo">
+        <p class="subtitulo">
+          Simulador em runtime: os dados salvos aqui refletem na hora na API do
+          aluno (S4) e nas consultas do chat (S14).
+        </p>
+        <a
+          class="acao link-chat"
+          [routerLink]="['/aluno']"
+          [queryParams]="{ cpf: detalhe.aluno.cpf }"
+          target="_blank"
+          rel="noopener"
+          title="Abre o chat do aluno em outra aba; exige sessão de ALUNO nesse navegador."
+        >
+          Abrir chat do aluno (instância de teste)
+        </a>
+      </div>
+
+      @if (mensagemAtualizacao) {
+        <div class="sucesso" role="status" aria-live="polite">
+          <p>{{ mensagemAtualizacao }}</p>
+        </div>
+      }
+      @if (erroAtualizacao) {
+        <p class="erro" role="alert">{{ erroAtualizacao }}</p>
+      }
+
+      <h3>Matrícula</h3>
+      <div class="editor-linha">
+        <label for="status-matricula">Status da matrícula</label>
+        <select
+          id="status-matricula"
+          [(ngModel)]="statusMatriculaSelecionado"
+          [ngModelOptions]="{ standalone: true }"
+        >
+          @for (status of statusMatriculaOpcoes; track status) {
+            <option [value]="status">{{ rotuloStatusMatricula(status) }}</option>
+          }
+        </select>
+        <button
+          type="button"
+          class="acao"
+          (click)="salvarStatusMatricula()"
+          [disabled]="
+            salvandoStatusMatricula ||
+            statusMatriculaSelecionado === detalhe.aluno.status_matricula
+          "
+        >
+          {{ salvandoStatusMatricula ? 'Salvando…' : 'Salvar matrícula' }}
+        </button>
+      </div>
 
       <h3>Disciplinas</h3>
       @if (detalhe.disciplinas.length === 0) {
         <p class="aviso">Aluno sem disciplinas matriculadas.</p>
       } @else {
-        <table class="tabela-menor">
+        <table class="tabela-menor tabela-simulador">
+          <caption class="oculto">
+            Edição de notas por disciplina (valores de 0 a 10)
+          </caption>
           <thead>
             <tr>
               <th scope="col">Disciplina</th>
@@ -219,6 +270,7 @@
               <th scope="col">AV2</th>
               <th scope="col">Final</th>
               <th scope="col">Situação</th>
+              <th scope="col"><span class="oculto">Ações</span></th>
             </tr>
           </thead>
           <tbody>
@@ -226,10 +278,63 @@
               <tr>
                 <td>{{ disciplina.codigo }} — {{ disciplina.nome }}</td>
                 <td>{{ disciplina.semestre_letivo }}</td>
-                <td>{{ formatarNota(disciplina.nota_av1) }}</td>
-                <td>{{ formatarNota(disciplina.nota_av2) }}</td>
-                <td>{{ formatarNota(disciplina.nota_final) }}</td>
-                <td>{{ rotuloStatusDisciplina(disciplina.status_disciplina) }}</td>
+                <td>
+                  <input
+                    class="nota"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.1"
+                    [(ngModel)]="notasRascunho[disciplina.matricula_id].nota_av1"
+                    [ngModelOptions]="{ standalone: true }"
+                    [attr.aria-label]="'AV1 de ' + disciplina.nome"
+                  />
+                </td>
+                <td>
+                  <input
+                    class="nota"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.1"
+                    [(ngModel)]="notasRascunho[disciplina.matricula_id].nota_av2"
+                    [ngModelOptions]="{ standalone: true }"
+                    [attr.aria-label]="'AV2 de ' + disciplina.nome"
+                  />
+                </td>
+                <td>
+                  <input
+                    class="nota"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.1"
+                    [(ngModel)]="notasRascunho[disciplina.matricula_id].nota_final"
+                    [ngModelOptions]="{ standalone: true }"
+                    [attr.aria-label]="'Nota final de ' + disciplina.nome"
+                  />
+                </td>
+                <td>
+                  <select
+                    [(ngModel)]="notasRascunho[disciplina.matricula_id].status_disciplina"
+                    [ngModelOptions]="{ standalone: true }"
+                    [attr.aria-label]="'Situação de ' + disciplina.nome"
+                  >
+                    @for (status of statusDisciplinaOpcoes; track status) {
+                      <option [value]="status">{{ rotuloStatusDisciplina(status) }}</option>
+                    }
+                  </select>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="acao"
+                    (click)="salvarNotas(disciplina)"
+                    [disabled]="salvandoNotas[disciplina.matricula_id] || !notasValidas(disciplina)"
+                  >
+                    {{ salvandoNotas[disciplina.matricula_id] ? 'Salvando…' : 'Salvar notas' }}
+                  </button>
+                </td>
               </tr>
             }
           </tbody>
@@ -240,13 +345,15 @@
       @if (detalhe.mensalidades.length === 0) {
         <p class="aviso">Aluno sem mensalidades registradas.</p>
       } @else {
-        <table class="tabela-menor">
+        <table class="tabela-menor tabela-simulador">
+          <caption class="oculto">Edição do status dos boletos</caption>
           <thead>
             <tr>
               <th scope="col">Referência</th>
               <th scope="col">Vencimento</th>
               <th scope="col">Valor</th>
               <th scope="col">Status</th>
+              <th scope="col"><span class="oculto">Ações</span></th>
             </tr>
           </thead>
           <tbody>
@@ -255,7 +362,34 @@
                 <td>{{ formatarMes(mensalidade.mes_referencia) }}</td>
                 <td>{{ formatarData(mensalidade.data_vencimento) }}</td>
                 <td>{{ formatarValor(mensalidade.valor_original) }}</td>
-                <td>{{ rotuloStatusPagamento(mensalidade.status_pagamento) }}</td>
+                <td>
+                  <select
+                    [(ngModel)]="statusPagamentoRascunho[mensalidade.id]"
+                    [ngModelOptions]="{ standalone: true }"
+                    [attr.aria-label]="'Status do boleto de ' + formatarMes(mensalidade.mes_referencia)"
+                  >
+                    @for (status of statusPagamentoOpcoes; track status) {
+                      <option [value]="status">{{ rotuloStatusPagamento(status) }}</option>
+                    }
+                  </select>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="acao"
+                    (click)="salvarStatusMensalidade(mensalidade)"
+                    [disabled]="
+                      salvandoMensalidade[mensalidade.id] ||
+                      statusPagamentoRascunho[mensalidade.id] === mensalidade.status_pagamento
+                    "
+                  >
+                    {{
+                      salvandoMensalidade[mensalidade.id]
+                        ? 'Salvando…'
+                        : 'Salvar boleto'
+                    }}
+                  </button>
+                </td>
               </tr>
             }
           </tbody>

@@ -457,7 +457,7 @@ def test_listagem_sem_token_recebe_401(sessao: Session, client: TestClient) -> N
 def test_admin_detalha_aluno_com_disciplinas_e_mensalidades(
     sessao: Session, client: TestClient
 ) -> None:
-    _, aluno_id, _, _ = _montar_ambiente(sessao)
+    _, aluno_id, matricula_id, _ = _montar_ambiente(sessao)
     _fazer_login(client, "admin", "admin123")
 
     response = client.get(f"/api/admin/alunos/{aluno_id}")
@@ -470,6 +470,7 @@ def test_admin_detalha_aluno_com_disciplinas_e_mensalidades(
     assert len(corpo["disciplinas"]) == 1
     disciplina = corpo["disciplinas"][0]
     assert disciplina["codigo"] == "ADS101"
+    assert disciplina["matricula_id"] == str(matricula_id)
     assert disciplina["nome"] == "Algoritmos"
     assert disciplina["semestre_letivo"] == "2026.1"
     assert disciplina["status_disciplina"] == "AGUARDANDO_NOTA"
@@ -491,3 +492,36 @@ def test_detalhe_aluno_inexistente_retorna_404(
     response = client.get(f"/api/admin/alunos/{uuid.uuid4()}")
 
     assert response.status_code == 404
+
+
+def test_simulador_lanca_notas_pelo_detalhe_e_reflete_sem_recarregar_banco(
+    sessao: Session, client: TestClient
+) -> None:
+    """Fluxo do simulador (issue #18): detalhe → PATCH notas → detalhe atualizado.
+
+    O `matricula_id` exibido no detalhe é exatamente o usado no PATCH; a nova
+    leitura (sem reiniciar banco) já devolve a nota lançada para a S4/S14.
+    """
+    _, aluno_id, _, _ = _montar_ambiente(sessao)
+    _fazer_login(client, "admin", "admin123")
+
+    detalhe = client.get(f"/api/admin/alunos/{aluno_id}").json()
+    matricula_id = detalhe["disciplinas"][0]["matricula_id"]
+
+    patch = client.patch(
+        f"/api/admin/alunos/{aluno_id}/matriculas/{matricula_id}/notas",
+        json={
+            "nota_av1": 9.5,
+            "nota_av2": 8.0,
+            "nota_final": None,
+            "status_disciplina": "APROVADO",
+        },
+    )
+    assert patch.status_code == 200
+
+    atualizado = client.get(f"/api/admin/alunos/{aluno_id}").json()
+    disciplina = atualizado["disciplinas"][0]
+    assert disciplina["nota_av1"] == 9.5
+    assert disciplina["nota_av2"] == 8.0
+    assert disciplina["nota_final"] is None
+    assert disciplina["status_disciplina"] == "APROVADO"

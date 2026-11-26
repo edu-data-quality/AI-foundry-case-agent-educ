@@ -27,6 +27,7 @@ const DETALHE: AlunoDetalhe = {
   aluno: ALUNO,
   disciplinas: [
     {
+      matricula_id: 'uuid-mat-1',
       disciplina_id: 'uuid-d1',
       codigo: 'ADS101',
       nome: 'Algoritmos',
@@ -119,5 +120,67 @@ describe('AdminAlunosService', () => {
     req.flush({ ...ALUNO, ...payload });
 
     expect(recebido!).toEqual({ ...ALUNO, ...payload });
+  });
+
+  it('lança notas via PATCH da matrícula (simulador #18)', () => {
+    const payload = {
+      nota_av1: 9.5,
+      nota_av2: 8,
+      nota_final: null,
+      status_disciplina: 'APROVADO' as const,
+    };
+    let recebido: unknown = null;
+    service
+      .lancarNotas(ALUNO.id, 'uuid-mat-1', payload)
+      .subscribe((matricula) => (recebido = matricula));
+
+    const req = http.expectOne(
+      `${URL_BASE}/${ALUNO.id}/matriculas/uuid-mat-1/notas`,
+    );
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual(payload);
+    req.flush({
+      id: 'uuid-mat-1',
+      disciplina_id: 'uuid-d1',
+      semestre_letivo: '2026.1',
+      ...payload,
+    });
+
+    expect(recebido).toEqual({
+      id: 'uuid-mat-1',
+      disciplina_id: 'uuid-d1',
+      semestre_letivo: '2026.1',
+      ...payload,
+    });
+  });
+
+  it('altera status de mensalidade via PATCH', () => {
+    let recebido: unknown = null;
+    service
+      .alterarStatusMensalidade('uuid-m1', 'PAGO')
+      .subscribe((mensalidade) => (recebido = mensalidade));
+
+    const req = http.expectOne(
+      `${environment.apiUrl}/api/admin/mensalidades/uuid-m1/status`,
+    );
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ status: 'PAGO' });
+    req.flush({ ...DETALHE.mensalidades[0], status_pagamento: 'PAGO' });
+
+    expect(recebido).toEqual({ ...DETALHE.mensalidades[0], status_pagamento: 'PAGO' });
+  });
+
+  it('altera status de matrícula via PATCH', () => {
+    let recebido: AlunoResumo | null = null;
+    service
+      .alterarStatusMatricula(ALUNO.id, 'TRANCADO')
+      .subscribe((aluno) => (recebido = aluno));
+
+    const req = http.expectOne(`${URL_BASE}/${ALUNO.id}/matricula-status`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ status: 'TRANCADO' });
+    req.flush({ ...ALUNO, status_matricula: 'TRANCADO' });
+
+    expect(recebido!).toEqual({ ...ALUNO, status_matricula: 'TRANCADO' });
   });
 });
